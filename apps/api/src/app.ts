@@ -4,3 +4,7 @@ import { Hono } from "hono";
 export const app = new Hono();
 
 app.get("/healthz", (c) => c.json({ ok: true }));
+
+// DEV-1: customer channels: web chat, widget, tenant-bot webhooks, @ArchableBot, tenant CORS (plan §6.4).
+import { mountChannels } from "./channels/mount";
+mountChannels(app);
