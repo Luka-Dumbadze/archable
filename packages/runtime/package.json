@@ -10,8 +10,14 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@ai-sdk/gateway": "4.0.116",
     "@archable/compiler": "workspace:*",
     "@archable/contracts": "workspace:*",
+    "@vercel/functions": "3.10.1",
+    "ai": "7.0.143",
     "postgres": "3.4.9"
+  },
+  "devDependencies": {
+    "yaml": "2.9.1"
   }
 }
