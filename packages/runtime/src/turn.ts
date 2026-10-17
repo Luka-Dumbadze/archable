@@ -66,7 +66,8 @@ export function createHandleTurn(d: TurnDeps): HandleTurn {
       onStepFinish: (s) => {
         const now = performance.now();
         console.log(JSON.stringify({ event: 'turn.step', tenant: tenantId, turn_id: turnId, ms: Math.round(now - stepAt),
-          outcome: s.finishReason, tools: s.toolCalls.map((t) => t.toolName), tokens: { in: s.usage.inputTokens, out: s.usage.outputTokens } }));
+          outcome: s.finishReason, tools: s.toolCalls.map((t) => t.toolName), tokens: { in: s.usage.inputTokens, out: s.usage.outputTokens },
+          text_chars: s.text.length, parts: s.content.map((p) => p.type) }));
         stepAt = now;
       },
       model: d.languageModel(lane.model),

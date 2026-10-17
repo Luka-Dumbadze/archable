@@ -141,13 +141,13 @@ describe('an unsure primary is logged with its answers', () => {
     const primary = typesafeDecisionModel({ apiKey: 'k', fetch: (async () => json(500, {})) as unknown as typeof fetch });
     const rows: DecisionRow[] = [];
     const d = createDecisions({ primary, log: async (r) => { rows.push(...r); }, decide: (async () => ({
-      answers: { grounded: { type: 'boolean', probability: 0.78 }, commitment: { type: 'boolean', probability: 0.02 } },
+      answers: { grounded: { type: 'boolean', probability: 0.6 }, commitment: { type: 'boolean', probability: 0.02 } },
       response: { modelId: 'typesafe/jev-1.13.0' },
     })) as never });
     const draft: Draft = { tenantId: 't', turnId: 'u', text: 'x', digest: 'sha256:' + 'a'.repeat(64), evidence: [], inReplyTo: 'y' };
     expect(await d.preSend(marani, draft)).toBe(FAILED);
     await new Promise((r) => setTimeout(r, 0));
     expect(rows.map((r) => [r.head, r.verdict, r.model, (r.answer as { probability?: number }).probability]))
-      .toEqual([['send.grounded', 'unsure', 'typesafe/jev-1.13.0', 0.78], ['send.commitment', 'unsure', 'typesafe/jev-1.13.0', 0.02]]);
+      .toEqual([['send.grounded', 'unsure', 'typesafe/jev-1.13.0', 0.6], ['send.commitment', 'unsure', 'typesafe/jev-1.13.0', 0.02]]);
   });
 });

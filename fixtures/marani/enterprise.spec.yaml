@@ -228,8 +228,8 @@ decisions:                            # Jev question sets; thresholds from evals
     stage: pre_send                   # fails closed (I7)
     state: [draft_reply, evidence]
     instructions: Is every price, stock level, delivery time and policy in the reply supported by the evidence?
-    pass_at: 0.90
-    escalate: { probability_between: [0.50, 0.90] }
+    pass_at: 0.75                       # provisional, until evals/calibration exists: was 0.90 (Jev: correct Georgian reply 0.78, false replies 0.05-0.09)
+    escalate: { probability_between: [0.40, 0.75] }
   send.commitment:
     kind: boolean
     stage: pre_send

@@ -101,17 +101,17 @@ describe('preSend', () => {
     expect(h.calls).toHaveLength(1);
     expect(Object.keys(h.calls[0]!.questions)).toEqual(['grounded', 'commitment']);
     expect(h.calls[0]!.providerOptions).toEqual({ gateway: { models: [{ model: 'google/gemini-3.8-flash', when: { any: [
-      { question: 'grounded', probabilityBetween: [0.5, 0.9] },
+      { question: 'grounded', probabilityBetween: [0.4, 0.75] },
       { question: 'commitment', probabilityBetween: [0.1, 0.5] },
     ] } }] } });
     await flush();
     expect(h.rows.map((r) => [r.head, r.stage, r.verdict])).toEqual([['send.grounded', 'pre_send', 'pass'], ['send.commitment', 'pre_send', 'pass']]);
   });
 
-  it('applies pass_at 0.90 and block_at 0.20 from the spec', async () => {
-    expect((await harness(answers(0.89, 0.05)).decisions.preSend(marani, draft)).grounded.verdict).toBe('fail');
+  it('applies pass_at 0.75 and block_at 0.20 from the spec', async () => {
+    expect((await harness(answers(0.74, 0.05)).decisions.preSend(marani, draft)).grounded.verdict).toBe('fail');
     expect((await harness(answers(0.95, 0.2)).decisions.preSend(marani, draft)).commitment.verdict).toBe('fail');
-    expect((await harness(answers(0.9, 0.19)).decisions.preSend(marani, draft)).grounded.verdict).toBe('pass');
+    expect((await harness(answers(0.78, 0.19)).decisions.preSend(marani, draft)).grounded.verdict).toBe('pass');
   });
 
   it('returns FAILED on a forced timeout (fails closed) and logs both heads', async () => {
