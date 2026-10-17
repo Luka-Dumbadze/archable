@@ -168,6 +168,11 @@ A handshake is a PR from both branches into `main`, titled `H<n>: …`, merged o
 
 <!-- Q<n> (DEV-x, time): question → decision (both initials) -->
 
+- **Q1 (DEV-1, 17 Oct 22:10): where does the Lovable web app live?** Context: P0.D1.3.
+  - **Findings.** Lovable's docs describe only repo-root projects and say nothing about subdirectories ([Git sync](https://docs.lovable.dev/integrations/git-sync-overview), [GitHub](https://docs.lovable.dev/integrations/github)). A third-party guide (unverified) says Lovable expects a single root `package.json` with no workspaces. Since P0.D2.2, this repo's root `package.json` is the pnpm workspace root.
+  - **Proposal (DEV-1).** Create a new Lovable project, `archable-web`, which creates its own repo (Lovable always creates a new repo on connect). Its app lives at that repo's root, and Lovable stays on that repo's `main`. In this repo, `apps/web/` is not created. The web app gets the API types by copying `packages/contracts/src/index.ts` into `src/contracts.ts`, with the source commit noted at the top. DEV-1 re-copies after every `contracts:` commit. P0.D1.1 becomes "connect `archable-web` to GitHub; Lovable stays on its `main`".
+  - **Decision:** _pending DEV-2_
+
 ## Blocked on
 
 <!-- <task id> (DEV-x): what is needed, from whom -->
