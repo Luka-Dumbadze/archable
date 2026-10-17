@@ -1,5 +1,5 @@
 // resolve: every reference in the spec must resolve (v3 §3.3), and every tool and object gets an owning app,
-// from the spec's `app:` or else from the app's template manifest (PROGRESS.md Q2).
+// from the spec's `app:` or else from the app's template manifest (PROGRESS.md Q4).
 import type { Spec } from '@archable/schema';
 import YAML from 'yaml';
 import { parsePolicies, type ParsedPolicy } from './cedar';

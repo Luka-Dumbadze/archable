@@ -45,7 +45,6 @@ apps/api/                Hono on Vercel Functions: webhooks, turn engine entry, 
   src/http/              origin.ts, cors.ts                                                DEV-1
   src/routes/            webhooks, chat, widget (DEV-1) · turn, github, cron, manifest, devmode, owner (DEV-2)
   src/db.ts, auth.ts, app.ts
-apps/web/                the Lovable shell (Owner Mode, Developer Mode, /chat)             DEV-1 via Lovable
 packages/contracts/      API ↔ web types; the web app imports only this                    shared
 packages/{schema,compiler,runtime,gateway,architect,governance,spec-writer}/              DEV-2
 supabase/migrations/     20261017000000_archable_v3.sql, 20261018000000_archable_v3_1_ingress_rationale.sql
@@ -54,7 +53,7 @@ fixtures/marani/         the reference tenant repo tree (seed and e2e target)
 scripts/                 seed-marani.ts, architect-dry.ts, dev-session.ts
 ```
 
-If Lovable can't sync into `apps/web/`, the web app lives at the repo root, where Lovable puts it. `TEAM_PROTOCOL.md` §2 lists the file set either way.
+The web app (Lovable shell: Owner Mode, Developer Mode, `/chat`) lives in its **own repository, `archable-web`** (decision Q2 in `PROGRESS.md`). It isn't part of this workspace, and it receives the API types as a copy of `packages/contracts/src/index.ts` (`TEAM_PROTOCOL.md` §2).
 
 ## 5. TypeScript
 

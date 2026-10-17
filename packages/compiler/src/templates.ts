@@ -1,4 +1,4 @@
-// Template manifests: which tools and objects each app template owns (PROGRESS.md Q2).
+// Template manifests: which tools and objects each app template owns (PROGRESS.md Q4).
 // Templates are compiler inputs pinned by major version in archable.lock; a spec's `tools.*.app` overrides
 // the owner (plan §1.5). A2A edges and object ownership come from here.
 
