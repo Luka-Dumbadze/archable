@@ -60,7 +60,15 @@ export function createHandleTurn(d: TurnDeps): HandleTurn {
     }, d.gateway);
 
     const lane = bundle.models.dialogue;
+    let stepAt = performance.now();
     const result = await generate({
+      // One JSON line per model step (plan §9.2): timing, tool names, token counts. Never message text.
+      onStepFinish: (s) => {
+        const now = performance.now();
+        console.log(JSON.stringify({ event: 'turn.step', tenant: tenantId, turn_id: turnId, ms: Math.round(now - stepAt),
+          outcome: s.finishReason, tools: s.toolCalls.map((t) => t.toolName), tokens: { in: s.usage.inputTokens, out: s.usage.outputTokens } }));
+        stepAt = now;
+      },
       model: d.languageModel(lane.model),
       ...(lane.reasoning ? { reasoning: lane.reasoning as Reasoning } : {}),
       system: systemPrompt(bundle, agentId, route, ctx),

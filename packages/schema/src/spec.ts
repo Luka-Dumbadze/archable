@@ -61,7 +61,7 @@ const ObjectDef = z.strictObject({
 
 const ModelLane = z.strictObject({
   model: z.string(),
-  reasoning: z.enum(['low', 'medium', 'high']).optional(),
+  reasoning: z.enum(['none', 'minimal', 'low', 'medium', 'high']).optional(),       // AI SDK reasoning levels
   fallback: z.string().optional(),
 });
 
