@@ -7,8 +7,13 @@
 // index; a refused question makes decide() throw DecisionRefusalError.
 import { gateway } from '@ai-sdk/gateway';
 import { digestOf, type Bundle } from '@archable/compiler';
+import type { Experimental_DecisionModelV4 } from '@ai-sdk/provider';
 import { experimental_decide, type JSONValue } from 'ai';
 import type { InTenant } from './db';
+
+type GatewayWhen =
+  | { question: 'intent'; confidenceBelow: number }
+  | { any: [{ question: 'grounded' | 'commitment'; probabilityBetween: [number, number] }, ...{ question: 'grounded' | 'commitment'; probabilityBetween: [number, number] }[]] };
 
 // ── decision heads, as compiled from the spec (v3 §6 decisions) ──
 
@@ -109,10 +114,46 @@ export interface DecisionDeps {
   decide?: Decide;                                                  // tests inject a fake
   log: DecisionLog;
   now?: () => number;
+  // Jev called directly (typesafe.ts) instead of through AI Gateway. The gateway's conditional fallback then can't
+  // apply, so the same conditions are evaluated here, and a failed primary also falls back, inside the deadline.
+  primary?: Experimental_DecisionModelV4;
+  // The decision model that answers when the primary is unsure or fails. A language model can't be called as a
+  // decision model (the gateway refuses), so without one an escalation is "unsure": route fails open, pre-send closed.
+  fallback?: Experimental_DecisionModelV4;
+}
+
+class Unsure extends Error {
+  constructor() { super('primary unsure and no fallback decision model'); this.name = 'Unsure'; }
 }
 
 export function createDecisions(d: DecisionDeps) {
   const decide = d.decide ?? experimental_decide;
+
+  /** Asks the primary model; reruns the decision on the fallback when `escalates` holds or the primary fails. */
+  async function ask<Q extends Parameters<Decide>[0]['questions']>(
+    bundle: Bundle, state: Parameters<Decide>[0]['state'], questions: Q,
+    gatewayWhen: GatewayWhen | null, escalates: (r: Awaited<ReturnType<typeof decide<Q>>>) => boolean, abortSignal: AbortSignal,
+  ): Promise<{ r: Awaited<ReturnType<typeof decide<Q>>>; fallback: boolean }> {
+    const fb = bundle.models.decision.fallback;
+    if (!d.primary) {                                               // AI Gateway: it runs the conditional fallback
+      const r = await decide({
+        model: gateway.decisionModel(PRIMARY), state, questions, abortSignal, maxRetries: 0,
+        providerOptions: gatewayWhen && fb ? { gateway: { models: [{ model: fb, when: gatewayWhen }] } } : undefined,
+      });
+      return { r, fallback: r.response.modelId !== PRIMARY };
+    }
+    let failure: unknown = new Unsure();
+    try {
+      const r = await decide({ model: d.primary, state, questions, abortSignal, maxRetries: 0 });
+      if (!escalates(r)) return { r, fallback: false };
+    } catch (e) {
+      if (abortSignal.aborted) throw e;
+      failure = e;
+    }
+    if (!d.fallback) throw failure;
+    const r = await decide({ model: d.fallback, state, questions, abortSignal, maxRetries: 0 });
+    return { r, fallback: true };
+  }
   const now = d.now ?? (() => performance.now());
   const logged = (rows: DecisionRow[]) => { void d.log(rows).catch(() => {}); };   // evidence, never on the critical path
 
@@ -126,20 +167,13 @@ export function createDecisions(d: DecisionDeps) {
     try {
       const intent = head<ChoiceHead>(bundle, 'route.intent', 'choice');
       const signals = head<ScoreHead>(bundle, 'turn.signals', 'score');
-      const r = await withDeadline((abortSignal) => decide({
-        model: gateway.decisionModel(PRIMARY),
-        state,
-        questions: {
-          intent: { type: 'choice', instructions: intent.instructions ?? INTENT_INSTRUCTIONS, criteria: intent.criteria },
-          frustration: { type: 'score', instructions: signals.instructions ?? '', criteria: signals.criteria },
-        },
-        providerOptions: intent.escalate?.confidence_below !== undefined && bundle.models.decision.fallback
-          ? { gateway: { models: [{ model: bundle.models.decision.fallback,
-                                    when: { question: 'intent', confidenceBelow: intent.escalate.confidence_below } }] } }
-          : undefined,
-        abortSignal,
-        maxRetries: 0,                                              // the deadline is the budget; no retries inside it
-      }), bundle.deadlines.route);
+      const below = intent.escalate?.confidence_below;
+      const { r, fallback } = await withDeadline((abortSignal) => ask(bundle, state, {
+        intent: { type: 'choice', instructions: intent.instructions ?? INTENT_INSTRUCTIONS, criteria: intent.criteria },
+        frustration: { type: 'score', instructions: signals.instructions ?? '', criteria: signals.criteria },
+      }, below !== undefined ? { question: 'intent', confidenceBelow: below } : null,
+      (x) => below !== undefined && (x.answers.intent.probabilities?.[x.answers.intent.choice] ?? 0) < below,
+      abortSignal), bundle.deadlines.route);                        // the deadline covers the fallback too; no retries
       const level = Math.min(signals.criteria.length - 1, Math.max(0, Math.round(r.answers.frustration.score)));
       const out: Route = {
         intent: r.answers.intent.choice,
@@ -147,7 +181,7 @@ export function createDecisions(d: DecisionDeps) {
         frustration: signals.criteria[level]!,
         answeredBy: r.response.modelId,
       };
-      logged([row(out.answeredBy, out.answeredBy !== PRIMARY, { intent: r.answers.intent, frustration: r.answers.frustration }, out.intent)]);
+      logged([row(out.answeredBy, fallback, { intent: r.answers.intent, frustration: r.answers.frustration }, out.intent)]);
       return out;
     } catch (e) {
       logged([row(PRIMARY, false, { error: String(e) }, e instanceof DeadlineExceeded ? 'timeout' : 'error')]);
@@ -172,19 +206,14 @@ export function createDecisions(d: DecisionDeps) {
         ...(grounded.escalate?.probability_between ? [{ question: 'grounded' as const, probabilityBetween: grounded.escalate.probability_between }] : []),
         ...(commitment.escalate?.probability_between ? [{ question: 'commitment' as const, probabilityBetween: commitment.escalate.probability_between }] : []),
       ];
-      const r = await withDeadline((abortSignal) => decide({
-        model: gateway.decisionModel(PRIMARY),
-        state,
-        questions: {
-          grounded: { type: 'boolean', instructions: grounded.instructions },
-          commitment: { type: 'boolean', instructions: commitment.instructions },
-        },
-        providerOptions: when.length && bundle.models.decision.fallback
-          ? { gateway: { models: [{ model: bundle.models.decision.fallback, when: { any: when as [typeof when[0], ...typeof when] } }] } }
-          : undefined,
-        abortSignal,
-        maxRetries: 0,
-      }), bundle.deadlines.pre_send);
+      const inBand = (p: number, band?: [number, number]) => band !== undefined && p >= band[0] && p <= band[1];
+      const { r, fallback } = await withDeadline((abortSignal) => ask(bundle, state, {
+        grounded: { type: 'boolean', instructions: grounded.instructions },
+        commitment: { type: 'boolean', instructions: commitment.instructions },
+      }, when.length ? { any: when as [typeof when[0], ...typeof when] } : null,
+      (x) => inBand(x.answers.grounded.probability, grounded.escalate?.probability_between)
+          || inBand(x.answers.commitment.probability, commitment.escalate?.probability_between),
+      abortSignal), bundle.deadlines.pre_send);
       const g = r.answers.grounded.probability;
       const c = r.answers.commitment.probability;
       const out: Signals = {
@@ -192,7 +221,7 @@ export function createDecisions(d: DecisionDeps) {
         commitment: { verdict: c < commitment.block_at ? 'pass' : 'fail', p: c, payload_digest: draft.digest },
         answeredBy: r.response.modelId,
       };
-      logged(rows(out.answeredBy, out.answeredBy !== PRIMARY,
+      logged(rows(out.answeredBy, fallback,
         { 'send.grounded': { probability: g }, 'send.commitment': { probability: c } },
         [out.grounded.verdict, out.commitment.verdict]));
       return out;

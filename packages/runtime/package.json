@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@ai-sdk/gateway": "4.0.116",
+    "@ai-sdk/provider": "4.0.29",
     "@archable/compiler": "workspace:*",
     "@archable/contracts": "workspace:*",
     "@vercel/functions": "3.10.1",
