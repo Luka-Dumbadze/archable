@@ -202,6 +202,12 @@ importers:
 
   packages/compiler:
     dependencies:
+      '@archable/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@archable/schema':
+        specifier: workspace:*
+        version: link:../schema
       '@cedar-policy/cedar-wasm':
         specifier: 4.13.0
         version: 4.13.0
