@@ -20,6 +20,7 @@ type Call = { method: string; payload: Record<string, unknown> };
 
 // In-memory stand-in for DEV-2's owner intake (packages/architect intake.ts, plan §7.7): a change request comes
 // back as one normalized statement with Draft it / Not this; each button's ref works once.
+const UNDO_REF = "uNd0cR58xxxxxxxxxxxxxx", OLD_UNDO_REF = "uNd0cR41xxxxxxxxxxxxxx";
 const DRAFT_REF = "dR4ftD16xxxxxxxxxxxxxx", DISMISS_REF = "n0tTh1sD16xxxxxxxxxxxx";
 function fakeIntake() {
   const open = new Map<string, OwnerReply>([
@@ -63,6 +64,10 @@ function setup(over: Partial<ArchableBotDeps> = {}) {
     settle: vi.fn(async () => {}),
     rationaleFor: vi.fn(async (ref: string) => (ref === "c:AAAAAAAAAAAAAAAAAAAAAA" ? "Why: 14 customers asked to pay the courier in cash." : null)),
     ...fakeIntake(),
+    undo: vi.fn(async (u: number, ref: string) =>
+      u !== OWNER ? { outcome: "unknown" as const, text: null }
+      : ref === UNDO_REF ? { outcome: "undone" as const, text: "Undone: cash on delivery up to 300 GEL.\n\nMarani OS is back to the previous version." }
+      : { outcome: "expired" as const, text: null }),
     publicApiOrigin: "https://api.archable.run",
     newTurnId: () => "turn-1",
     ...over,
@@ -349,5 +354,31 @@ describe("ownerKeyboard", () => {
       { text: "Draft it", callback_data: `op:${DRAFT_REF}` },
     ]]);
     expect(ownerKeyboard([])).toBeNull();
+  });
+});
+
+describe("Undo on a Live card", () => {
+  it("undoes, edits the card to the undone text and removes the button", async () => {
+    const t = setup();
+    await t.send(cb(`ud:${UNDO_REF}`));
+    expect(t.deps.undo).toHaveBeenCalledWith(OWNER, UNDO_REF);
+    expect(t.sent("answerCallbackQuery")[0]).toMatchObject({ text: "Undone" });
+    expect(t.sent("editMessageText")[0]).toEqual({ chat_id: OWNER_CHAT, message_id: 77,
+      text: "Undone: cash on delivery up to 300 GEL.\n\nMarani OS is back to the previous version.", reply_markup: { inline_keyboard: [] } });
+  });
+
+  it("after the 24 h window: says so and removes the button, text unchanged", async () => {
+    const t = setup();
+    await t.send(cb(`ud:${OLD_UNDO_REF}`));
+    expect(t.sent("answerCallbackQuery")[0]).toMatchObject({ text: "Undo is no longer available" });
+    expect(t.sent("editMessageReplyMarkup")[0]).toMatchObject({ chat_id: OWNER_CHAT, message_id: 77 });
+    expect(t.sent("editMessageText")).toEqual([]);
+  });
+
+  it("someone else's tap changes nothing", async () => {
+    const t = setup();
+    await t.send(cb(`ud:${UNDO_REF}`, CUSTOMER));
+    expect(t.sent("answerCallbackQuery")[0]).toMatchObject({ text: "Unknown request" });
+    expect(t.calls.map((c) => c.method)).toEqual(["answerCallbackQuery"]);
   });
 });

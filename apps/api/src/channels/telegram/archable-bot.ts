@@ -30,6 +30,7 @@ export interface ArchableBotDeps {
   rationaleFor(ref: string, tgUserId: number): Promise<string | null>;   // null: not a member, or unknown ref
   ownerMessage(tgUserId: number, text: string): Promise<OwnerReply>;     // owner request → normalized statement + Draft it / Not this (§7.7)
   ownerPress(tgUserId: number, ref: string): Promise<OwnerReply | null>; // a tapped post button, by its body.ref; null: expired or not theirs
+  undo(tgUserId: number, ref: string): Promise<{ outcome: 'undone' | 'expired' | 'unknown'; text: string | null }>;   // Live card's Undo (v3 §4.3)
   publicApiOrigin: string;                                    // 'https://api.archable.run'
   newTurnId(): string;
 }
@@ -166,6 +167,15 @@ export function registerArchableBot(bot: Bot, d: ArchableBotDeps) {
     const text = await d.rationaleFor(`${ctx.match[1]}:${ctx.match[2]}`, ctx.from.id);
     await ctx.answerCallbackQuery(text ? undefined : { text: 'Not available' });
     if (text) await ctx.reply(text);                            // a new message: the approval card stays untouched
+  });
+
+  // ── Undo on a Live card: pre-authorized, it returns to the digest the owner approved before (v3 §4.3) ──
+  bot.callbackQuery(/^ud:([A-Za-z0-9_-]{22})$/, async (ctx) => {
+    const r = await d.undo(ctx.from.id, ctx.match[1]!);
+    const toast = { undone: 'Undone', expired: 'Undo is no longer available', unknown: 'Unknown request' }[r.outcome];
+    await ctx.answerCallbackQuery({ text: toast });
+    if (r.outcome === 'undone' && r.text) await ctx.editMessageText(r.text, { reply_markup: { inline_keyboard: [] } }).catch(() => {});
+    else if (r.outcome === 'expired') await ctx.editMessageReplyMarkup().catch(() => {});
   });
 
   // ── Owner choices: a post button from an OwnerReply, pressed in Telegram (§7.7, §8.4) ──
