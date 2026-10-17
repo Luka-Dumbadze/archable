@@ -53,7 +53,7 @@ fixtures/marani/         the reference tenant repo tree (seed and e2e target)
 scripts/                 seed-marani.ts, architect-dry.ts, dev-session.ts
 ```
 
-The web app (Lovable shell: Owner Mode, Developer Mode, `/chat`) lives in its **own repository, `archable-web`** (decision Q1 in `PROGRESS.md`). It isn't part of this workspace, and it receives the API types as a copy of `packages/contracts/src/index.ts` (`TEAM_PROTOCOL.md` §2).
+The web app (Lovable shell: Owner Mode, Developer Mode, `/chat`) lives in its **own repository, `archable-web`** (decision Q2 in `PROGRESS.md`). It isn't part of this workspace, and it receives the API types as a copy of `packages/contracts/src/index.ts` (`TEAM_PROTOCOL.md` §2).
 
 ## 5. TypeScript
 

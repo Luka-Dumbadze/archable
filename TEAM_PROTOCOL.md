@@ -20,7 +20,7 @@ A file has exactly one owner. Only the owner (or the owner's Claude Code) edits 
 
 | Path | Contents (plan section) |
 |---|---|
-| repo **`archable-web`** (all of it) | the Lovable shell: Owner Mode, Developer Mode, `/chat` (plan §6.6, §8). A separate repository (decision Q1 in `PROGRESS.md`). **Lovable is the only writer of React there (I6)**: Claude Code may write types, hooks and prompts for Lovable, but not components Lovable owns. |
+| repo **`archable-web`** (all of it) | the Lovable shell: Owner Mode, Developer Mode, `/chat` (plan §6.6, §8). A separate repository (decision Q2 in `PROGRESS.md`). **Lovable is the only writer of React there (I6)**: Claude Code may write types, hooks and prompts for Lovable, but not components Lovable owns. |
 | `apps/api/src/channels/**` | `telegram/archable-bot.ts`, `telegram/tenant-bot.ts`, `telegram/send.ts`, `web/session.ts` (plan §6.2–§6.5) |
 | `apps/api/src/http/**` | `origin.ts`, `cors.ts` (plan §6.5) |
 | `apps/api/src/routes/webhooks.ts`, `routes/chat.ts`, `routes/widget.ts` | tenant-bot webhooks, chat API, widget loader and config (plan §6.2, §6.5) |
@@ -29,7 +29,7 @@ Paths in the brief are mapped onto the plan's:
 - *`apps/api/src/telegram/**`* is `apps/api/src/channels/telegram/**`.
 - *`public/widget.js`* is served by `apps/api/src/routes/widget.ts` at `/v1/widget.js`, with the `archable.run/widget.js` rewrite (plan §6.5). Serving it from the API keeps one URL for every tenant and keeps it out of Lovable's files.
 
-**The web app lives in its own repository** (`archable-web`, decision Q1). Lovable's docs describe only repo-root projects, and this repo's root `package.json` is the pnpm workspace root, so the two can't share a root. There is no `apps/web/` in this repo. The web app gets the API types by copying them (see "Shared" below).
+**The web app lives in its own repository** (`archable-web`, decision Q2). Lovable's docs describe only repo-root projects, and this repo's root `package.json` is the pnpm workspace root, so the two can't share a root. There is no `apps/web/` in this repo. The web app gets the API types by copying them (see "Shared" below).
 
 ### DEV-2 owns
 
