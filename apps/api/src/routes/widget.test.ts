@@ -5,6 +5,7 @@ const marani: WidgetConfig = {
   greeting: { en: "Hi! Looking for a wine?" },
   launcher: { label: { ka: "მოგვწერეთ", en: "Chat with us" }, position: "right" },
   brand: "#7B1E3A",
+  embed_origins: ["https://marani.ge"],
 };
 const app = widgetRoutes({ async widgetConfig(s) { return s === "marani" ? marani : null; } });
 

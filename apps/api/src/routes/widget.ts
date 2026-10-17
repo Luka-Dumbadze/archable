@@ -2,13 +2,10 @@
 // The loader only draws a launcher and an iframe; the chat itself runs on the tenant's origin, so the host
 // page never sees a token, a message or the session secret, and the chat API never trusts a host origin.
 import { Hono } from 'hono';
+import type { WidgetConfig } from '@archable/contracts';
 import { publicCors } from '../http/cors';
 
-export interface WidgetConfig {                 // public projection of spec channels.web_chat + ui.theme
-  greeting: Record<string, string>;
-  launcher: { label: Record<string, string>; position: 'left' | 'right' };
-  brand: string;                                // '#7B1E3A'
-}
+export type { WidgetConfig };                   // in contracts since Q3: the chat page reads embed_origins for frame-ancestors
 
 export interface WidgetDeps {
   widgetConfig(slug: string): Promise<WidgetConfig | null>;   // from the active bundle; null if chat is off
