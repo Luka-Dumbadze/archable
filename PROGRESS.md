@@ -42,7 +42,7 @@ Ids are `P<phase>.D<dev>.<n>`. Each developer edits only their own lines.
 
 ### DEV-1
 
-- [ ] **P1.D1.1** `[DEV-1: Frontend]` Lovable shell bootstrap: Vite + React + TS + Tailwind, brand from the Marani theme (`#7B1E3A`, Noto Sans Georgian), routes `/` (Owner Mode), `/dev` (Developer Mode), `/chat`, Supabase client with the publishable key only. Check: the Lovable preview loads all three routes on a 360 px viewport; no service key appears in any built file (`grep -r service_role dist/` is empty).
+- [ ] **P1.D1.1** `[DEV-1: Frontend]` Lovable shell bootstrap: Vite + React + TS + Tailwind, brand from the Marani theme (`#7B1E3A`, Noto Sans Georgian), routes `/` (Owner Mode), `/dev` (Developer Mode), `/chat`, Supabase client with the publishable key only. Check: the Lovable preview loads all three routes on a 360 px viewport; no service key appears in any built file (`grep -r service_role dist/` is empty). — **17 Oct, check failed on `archable-web@3fb7467`:** a single `/` route (Owner/Developer is a state toggle, no `/dev` or `/chat`); indigo + Geist theme, not Marani's; no Supabase client; the owner-facing Genesis screen says "…to GitHub". No service key, mic or voice found. Follow-up Lovable prompt given to the developer.
 - [ ] **P1.D1.2** `[DEV-1: Frontend]` Copy `packages/contracts/src/index.ts` to `archable-web/src/contracts.ts` with the source-commit header (TEAM_PROTOCOL §2). Check: a component typed with `Manifest` compiles in Lovable's build, and the header's commit equals this repo's latest `contracts:` commit.
 - [ ] **P1.D1.3** `[DEV-1: Frontend]` Owner sign-in screen that accepts the one-time `/web` link token (plan §1.4), using a stubbed exchange. Check: the stubbed exchange produces a Supabase session in the browser, and a reload keeps it.
 
@@ -176,3 +176,5 @@ A handshake is a PR from both branches into `main`, titled `H<n>: …`, merged o
 ## Blocked on
 
 <!-- <task id> (DEV-x): what is needed, from whom -->
+
+- **P2.D1.2** (DEV-1): needs `apps/api` and the pnpm workspace on `main`, from DEV-2. As of 17 Oct they exist only on `feat/backend-core` (draft PR #1, titled "do not merge"); `main` is still `02ab565`.
