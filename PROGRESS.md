@@ -14,7 +14,7 @@ Ids are `P<phase>.D<dev>.<n>`. Each developer edits only their own lines.
 
 - [x] **P0.D2.1** `[DEV-2: Backend]` **Rotate every key from commit `ad4b0d5`**: Supabase service-role key, Telegram bot token (`/revoke` in @BotFather), Gemini key, GitHub token. Then commit the `.gitignore` that ignores `.env*`. Check: old keys are refused (Supabase returns 401 with the old service key; `getMe` with the old token returns 401). — 2026-10-17: old Telegram `getMe` 401, old GitHub token 401, old Gemini key 400; old service key gets 410 "Project removed" from `tvykesojaxrzjoldcbmc` (refused, but not the expected 401); `.env*` ignored since `02ab565`.
 - [x] **P0.D2.2** `[DEV-2: Backend]` Workspace scaffold: root `package.json` (`"type": "module"`, `packageManager: pnpm@…`, scripts `typecheck`, `test`, `build` running `pnpm -r --if-present`), `pnpm-workspace.yaml` (`apps/*`, `packages/*`), `tsconfig.base.json` (`CLAUDE.md` §5), empty packages with `typecheck` and `test` scripts, `pnpm-lock.yaml` (plan §3.1). Check: `pnpm install && pnpm typecheck && pnpm test` exits 0 locally, and the CI run on the push is green. — 2026-10-17: all three exit 0 locally over 9 packages (pnpm 12.14.0); CI run 39055137814 on draft PR #1 green, every step incl. Install/Typecheck/Test succeeded. The red X on the PR is the Vercel deploy ("Deployment was blocked"), not CI (see P0.D2.4).
-- [ ] **P0.D2.3** `[DEV-2: Backend]` Supabase projects `archable-dev` and `archable` in `eu-central-1` with `pg_jsonschema`, `pgmq` and `pg_cron` enabled (plan §4.1, steps 1 and 4). Check: `select extname from pg_extension` lists all three on both projects.
+- [x] **P0.D2.3** `[DEV-2: Backend]` Supabase projects `archable-dev` and `archable` in `eu-central-1` with `pg_jsonschema`, `pgmq` and `pg_cron` enabled (plan §4.1, steps 1 and 4). Check: `select extname from pg_extension` lists all three on both projects. — 2026-10-17: **one project only** (`archable`, ref `zgfaxpdnoxlxeuzphtqs`), see Q1; the query lists `pg_cron`, `pg_jsonschema`, `pgmq`; private `media` bucket created; Realtime public access off (reported by DEV-2 from the dashboard).
 - [ ] **P0.D2.4** `[DEV-2: Backend]` Vercel project for `apps/api` in `fra1`, AI Gateway enabled, env variables per plan §3.3 (using the rotated keys), `vercel env pull` working locally. Check: a deployed `GET /healthz` returns 200, and locally `VERCEL_OIDC_TOKEN` is present after `vercel env pull`.
 
 ### DEV-1
@@ -167,6 +167,8 @@ A handshake is a PR from both branches into `main`, titled `H<n>: …`, merged o
 ## Open questions
 
 <!-- Q<n> (DEV-x, time): question → decision (both initials) -->
+
+- Q1 (DEV-2, 2026-10-17): Plan §4.1 asks for two Supabase projects, `archable-dev` and `archable`. For the hackathon MVP DEV-2 created only `archable` (`zgfaxpdnoxlxeuzphtqs`). Proposal: every task that names `archable-dev` (P1.D2.3–P1.D2.10, P3.D2.*, H1) runs against `archable`; SQL suites stay inside `begin … rollback`; the dev and production Telegram bots stay separate (plan §3.3). → decision: pending (DEV-2 proposed; needs DEV-1's initials)
 
 ## Blocked on
 
