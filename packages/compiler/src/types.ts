@@ -1,5 +1,6 @@
 // The compiler's public types (plan §4.3).
 import type { A2AGraph, Effect, JsonSchema } from '@archable/contracts';
+import type { ActionFacts } from './cedar-schema';
 import type { Digest } from './digest';
 import type { EdgeKind, GNode } from './graph/blast';
 import type { PolicyBound } from './policy-bounds';
@@ -25,7 +26,7 @@ export interface Bundle {
   agents: Record<string, { app: string; persona: string; tools: string[]; decisions: unknown; context: unknown; display_name: Record<string, string> }>;
   triggers: Record<string, { on: string; call: string }>;
   decisions: Record<string, unknown>;                                   // v3 §6 decisions, thresholds included
-  policies: { byId: Record<string, string>; schema: unknown; bounds: PolicyBound[] };
+  policies: { byId: Record<string, string>; schema: unknown; bounds: PolicyBound[]; facts: Record<string, ActionFacts> };
   // embed_origins is not in plan §4.3's type; the chat page needs it for frame-ancestors (plan §6.6).
   channels: Record<string, { kind: 'telegram_bot' | 'telegram_business' | 'web'; public?: WidgetConfig; embed_origins?: string[] }>;
   ui: unknown;                                                          // v3 §2.4 UI projection

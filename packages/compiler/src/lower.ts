@@ -2,6 +2,7 @@
 // `x-archable: {semantics: "money", currency, scale: 2}` (plan §4.3); everything unordered is sorted (I2).
 import type { JsonSchema } from '@archable/contracts';
 import type { Field, Spec } from '@archable/schema';
+import { cedarArtifacts } from './cedar-schema';
 import { digestOf } from './digest';
 import { boundsOf } from './policy-bounds';
 import type { Errors } from './errors';
@@ -158,6 +159,7 @@ export function lower(r: Resolved, errors: Errors): { bundle: Lowered; projectio
       : { kind: c.kind };
   }
 
+  const cedar = cedarArtifacts(spec, r.policies, errors);
   const bounds = r.policies
     .flatMap((p) => boundsOf(p.json))
     .sort((a, b) => (a.policy + a.path < b.policy + b.path ? -1 : a.policy + a.path > b.policy + b.path ? 1 : 0));
@@ -173,8 +175,8 @@ export function lower(r: Resolved, errors: Errors): { bundle: Lowered; projectio
     agents,
     triggers: spec.triggers,
     decisions: spec.decisions,
-    // Cedar schema validation needs the gateway's context shape (plan §5.5, Phase 2); until then, null.
-    policies: { byId: Object.fromEntries(r.policies.map((p) => [p.id, p.text])), schema: null, bounds },
+    // byId: the policy files plus the generated permits; schema and facts: the context the gateway builds (cedar-schema.ts).
+    policies: { byId: { ...Object.fromEntries(r.policies.map((p) => [p.id, p.text])), ...cedar.permits }, schema: cedar.schema, bounds, facts: cedar.facts },
     channels,
     ui: spec.ui,
     evals: {
