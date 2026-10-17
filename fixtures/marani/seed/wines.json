@@ -1,0 +1,7 @@
+[
+  { "sku": "MRN-SAP-2021", "label": "Marani Saperavi 2021", "grape": "saperavi", "vintage": 2021, "price": 3500, "stock": 48 },
+  { "sku": "MRN-RKA-2022", "label": "Marani Rkatsiteli Qvevri 2022", "grape": "rkatsiteli", "vintage": 2022, "price": 2800, "stock": 36 },
+  { "sku": "MRN-MTS-2023", "label": "Marani Mtsvane 2023", "grape": "mtsvane", "vintage": 2023, "price": 2600, "stock": 24 },
+  { "sku": "MRN-KIS-2021", "label": "Marani Kisi Amber 2021", "grape": "kisi", "vintage": 2021, "price": 4200, "stock": 12 },
+  { "sku": "MRN-KHI-2022", "label": "Marani Khikhvi 2022", "grape": "khikhvi", "vintage": 2022, "price": 3900, "stock": 18 }
+]

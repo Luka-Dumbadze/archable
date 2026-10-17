@@ -1,0 +1,308 @@
+# enterprise.spec.yaml: Marani OS (v3 §6 with the v3.1 delta of plan §1.5)
+# The definition root of the Business Monorepo, compiled by @archable/compiler 3.x into a
+# content-addressed bundle. People, prices, orders and messages are facts and live in Postgres (I1).
+apiVersion: archable.dev/v3
+kind: Enterprise
+
+metadata:
+  id: marani                          # → marani.archable.run; immutable after provisioning
+  name: Marani
+  os_name: Marani OS
+  archetype: retail.wine_delivery@2   # seeded the defaults recorded in assumptions.yaml
+  currency: GEL                       # money is an integer number of tetri (1 GEL = 100)
+  timezone: Asia/Tbilisi
+  locale: { primary: ka, also: [en, ru], scripts: [mkhedruli, translit] }
+
+runtime:
+  models:                             # AI Gateway slugs; moved by the merged-PR index (T2)
+    dialogue: { model: google/gemini-3.8-flash, reasoning: low }
+    vision: { model: google/gemini-3.8-flash, reasoning: medium }
+    patch: { model: google/gemini-3.8-flash, reasoning: high }
+    decision: { model: typesafe-ai/jev, fallback: google/gemini-3.8-flash }
+  deadlines_ms: { route: 600, dialogue: 4000, pre_send: 2000, tool: 2000 }
+
+roles:                                # what each role may do; the members themselves are rows in Postgres
+  owner: { approves: [T1, T2, T3, T4], edits: all }
+  developer: { reviews: [T2, T3, T4], edits: all }
+  staff: { handles: [handoff, order_approval], edits: [customer, order, delivery_job, courier] }
+
+objects:
+  customer:
+    key: phone
+    title: name
+    fields:
+      name: { type: string, max: 120 }
+      phone: { type: phone, pii: true }
+      birthdate: { type: date, pii: true, optional: true }
+      age_verified: { type: boolean, default: false }
+      address: { type: string, pii: true, optional: true }
+      segment: { type: enum, values: [new, regular, vip], default: new }
+  wine:
+    key: sku
+    title: label
+    source: evidence                  # rows mined from the flyer, with provenance (§2.5)
+    fields:
+      sku: { type: string, pattern: "^[A-Z0-9-]{3,20}$" }
+      label: { type: string, max: 160 }
+      grape: { type: enum, values: [saperavi, rkatsiteli, mtsvane, kisi, khikhvi, other] }
+      vintage: { type: integer, min: 1900, max: 2026, optional: true }
+      price: { type: money, edit: [owner] }
+      stock: { type: integer, min: 0, index: range }
+  order:
+    key: number
+    title: number
+    fields:
+      number: { type: string, generated: "M-{seq:5}" }
+      customer: { type: ref, to: customer }
+      lines:
+        type: list
+        min: 1
+        of:
+          wine: { type: ref, to: wine, by: sku }
+          qty: { type: integer, min: 1, max: 24 }
+          unit_price: { type: money }
+      discount_pct: { type: integer, min: 0, max: 100, default: 0 }
+      surcharge: { type: money, default: 0 }
+      total: { type: money, derived: "sum(lines.map(l, l.qty * l.unit_price)) * (100 - discount_pct) / 100 + surcharge" }
+      payment: { type: enum, values: [card_link, bank_transfer], default: card_link }
+      delivery: { type: enum, values: [standard, express], default: standard }
+      status: { type: enum, values: [draft, awaiting_staff, confirmed, dispatched, delivered, cancelled], default: draft }
+  delivery_job:
+    key: order
+    title: order
+    fields:
+      order: { type: ref, to: order }
+      zone: { type: enum, values: [mtatsminda, vake, saburtalo, didube, isani] }
+      courier: { type: ref, to: courier, optional: true }
+      eta: { type: datetime, optional: true }
+      payout: { type: money, optional: true }
+      status: { type: enum, values: [queued, assigned, picked_up, delivered, failed], default: queued }
+  courier:
+    key: phone
+    title: name
+    fields:
+      name: { type: string }
+      phone: { type: phone, pii: true }
+      payout_rate: { type: money, edit: [owner] }   # a fact, edited in the UI; the records trigger enforces `edit`
+      active: { type: boolean, default: true }
+
+apps:
+  contact_center:
+    template: tpl.contact_center@3
+    agent: cellar_master
+    channels: [tg_customers, tg_business, web_chat]   # v3.1: was [tg_customers] (plan §1.5)
+    params: { handoff_to: staff, business_hours: "10:00-22:00" }
+  quickshipper:
+    template: tpl.dispatch@2
+    agent: dispatch_node
+    params:
+      zones: [mtatsminda, vake, saburtalo, didube, isani]
+      express: { enabled: true, surcharge: 1000 }  # node param:quickshipper.express.surcharge, money (10.00 GEL)
+  customer_center:
+    template: tpl.crm@2
+    params: { primary: customer, timelines: [order, chapter] }
+
+agents:
+  cellar_master:
+    app: contact_center
+    preset: domain_themed             # role_based ("Support Node") | personal ("Luka") | domain_themed
+    display_name: { ka: "მარნის მეურნე", en: Cellar Master }
+    persona: personas/cellar_master.md
+    lane: dialogue
+    tools: [catalog.search, order.quote, order.create, customer.upsert, delivery.status, handoff.staff]   # + message.send, built in
+    decisions: { route: route.intent, signals: turn.signals, pre_send: [send.grounded, send.commitment] }
+    context: { conversation_tail: 20, chapter_summary: true, records: [customer, order] }
+  dispatch_node:
+    app: quickshipper
+    preset: role_based
+    display_name: { en: Dispatch Node }
+    persona: personas/dispatch_node.md
+    lane: dialogue
+    tools: [delivery.dispatch, delivery.update, payout.compute, handoff.staff]
+    decisions: { pre_send: [send.grounded] }
+
+tools:                                # MCP-shaped contracts. message.send is built in, effect external.
+  catalog.search:
+    description: Find wines by grape, price or name. Returns price and stock.
+    input: { query: "string?", grape: "wine.grape?", max_price: "money?" }
+    output: { items: "list<wine>" }
+    reads: [wine.*]
+    effect: none
+  order.quote:
+    description: Price a basket with delivery surcharge and discount.
+    input: { lines: order.lines, delivery: order.delivery, discount_pct: "order.discount_pct?" }
+    output: { surcharge: money, total: money }
+    reads: [wine.price, wine.stock, quickshipper.express.surcharge]
+    effect: none
+  order.create:
+    description: Create an order for a customer whose age is verified.
+    input: { customer: customer, lines: order.lines, delivery: order.delivery, payment: order.payment, discount_pct: "order.discount_pct?" }
+    output: { order: "order{number,total,status}" }
+    reads: [wine.price, wine.stock, customer.age_verified, quickshipper.express.surcharge]
+    writes: [order.*]
+    effect: internal
+    idempotency: [customer, lines, delivery]
+  customer.upsert:
+    description: Create or update a customer by phone number.
+    input: { phone: customer.phone, name: "customer.name?", address: "customer.address?", birthdate: "customer.birthdate?" }
+    writes: [customer.*]
+    effect: internal
+  handoff.staff:
+    description: Hand the conversation to a person and tell the customer when to expect a reply.
+    input: { reason: string, urgency: "enum<normal,urgent>" }
+    effect: notify
+  delivery.dispatch:
+    description: Book a courier for a confirmed order.
+    input: { order: order }
+    reads: [order.delivery, order.payment, order.total, customer.address, customer.phone]
+    writes: [delivery_job.*]
+    effect: external                  # tagged external and pii_egress: address and phone leave the system
+    connection: courier_api
+  delivery.update:
+    description: Record a status or ETA reported by the courier.
+    input: { job: delivery_job, status: delivery_job.status, eta: "delivery_job.eta?" }
+    writes: [delivery_job.status, delivery_job.eta]
+    effect: internal
+  payout.compute:
+    description: Compute the courier payout for a delivered job.
+    input: { job: delivery_job }
+    reads: [courier.payout_rate, order.delivery, order.payment]
+    writes: [delivery_job.payout]
+    effect: internal
+  delivery.status:                     # the brief's dispatch.lookup (plan §1.5)
+    app: quickshipper                  # owner; templates declare it, the spec may override
+    description: Where is my order? Needs the order number and the customer's phone.
+    input: { order: order.number, phone: customer.phone }
+    output: { status: delivery_job.status, eta: "delivery_job.eta?" }
+    reads: [delivery_job.status, delivery_job.eta, order.customer, customer.phone]
+    effect: none
+  customer.notify:                     # proactive status message to the customer's last channel
+    app: contact_center
+    description: Tell the customer their delivery status changed.
+    input: { job: delivery_job }
+    reads: [delivery_job.status, delivery_job.eta, order.customer]
+    effect: external                   # leaves the system as a message: T3 floor, as for message.send
+
+triggers:
+  dispatch_on_confirm: { on: "order.status -> confirmed", call: delivery.dispatch }
+  payout_on_delivery: { on: "delivery_job.status -> delivered", call: payout.compute }
+  notify_on_job_status: { on: "delivery_job.status -> picked_up|delivered|failed", call: customer.notify }
+
+connections:
+  courier_api:
+    kind: mcp                         # the courier company's HTTP API, wrapped by Elva as an MCP server
+    url: https://mcp.elva.dev/marani-courier
+    auth: { scheme: bearer, secret: "vault:marani/courier_api" }   # injected at egress, never in model context
+    map: { create_job: delivery.dispatch, job_status: delivery.update }
+
+channels:                              # what the business has; which bot or connection serves it is a fact (plan §1.5, §4.2)
+  tg_customers: { kind: telegram_bot }
+  tg_business: { kind: telegram_business, via: archable_bot, without_reply_rights: suggest }
+  web_chat:
+    kind: web
+    greeting: { ka: "გამარჯობა! რა ღვინოს ეძებთ?", en: "Hi! Looking for a wine?" }
+    launcher: { label: { ka: "მოგვწერეთ", en: "Chat with us" }, position: right }
+    embed_origins: ["https://marani.ge"]   # frame-ancestors for /chat?embed=1; empty = only *.archable.run
+
+decisions:                            # Jev question sets; thresholds from evals/calibration
+  route.intent:
+    kind: choice
+    stage: route                      # fails open (I7)
+    state: [inbound_message, conversation_tail(6), chapter]
+    criteria:
+      order_new: wants to buy, reserve or reorder wine
+      order_status: asks about an existing order or delivery
+      catalog: asks about wines, prices, stock or pairings
+      complaint: reports a problem with an order, a delivery or a bottle
+      human: asks for a person
+      other: anything else
+    escalate: { confidence_below: 0.6 }
+  turn.signals:                       # asked in the same request as route.intent
+    kind: score
+    stage: route
+    instructions: How frustrated is the customer?
+    criteria: [calm, impatient, frustrated, angry]
+    capture_failure_at: frustrated    # opens or feeds a desire (§7.2)
+  send.grounded:
+    kind: boolean
+    stage: pre_send                   # fails closed (I7)
+    state: [draft_reply, evidence]
+    instructions: Is every price, stock level, delivery time and policy in the reply supported by the evidence?
+    pass_at: 0.90
+    escalate: { probability_between: [0.50, 0.90] }
+  send.commitment:
+    kind: boolean
+    stage: pre_send
+    state: [draft_reply, evidence]
+    instructions: Does the reply promise a discount, refund, gift or delivery time that the evidence does not grant?
+    block_at: 0.20
+    escalate: { probability_between: [0.10, 0.50] }
+
+policies:
+  files: [policies/orders.cedar, policies/delivery.cedar, policies/messaging.cedar, policies/privacy.cedar]
+  default: deny                       # agent→tool permits are generated from agents.*.tools; files only forbid
+
+risk:
+  floors:                             # a tagged node in Δ ∪ Run(Δ) sets at least this tier (§3.5)
+    money: T3
+    external: T3
+    pii_egress: T3
+    authz: T3
+    governance: T4
+  change_rules:                       # minimum tier per kind of change; unknown kinds are T2
+    persona.text: T1
+    ui.copy: T1
+    ui.layout: T1
+    field.add_optional: T1
+    eval.add: T1
+    field.add_required: T2
+    field.retype: T2
+    enum.add_value: T2
+    tool.contract: T2
+    decision.criteria: T2
+    decision.threshold: T2
+    extension.code: T2
+    model.lane: T2
+    lock.bump: T2
+    policy.any: T3
+    eval.remove: T3
+    object.remove: T4                 # T2 when the object has no records
+    connection.any: T4
+    channel.copy: T1                   # greeting, launcher label (plan §1.5)
+    channel.any: T4
+    governance.any: T4
+    ci.any: T4
+  influence: { cut_at_bounded_tools: true }
+
+governance:
+  approvals:
+    T0: []
+    T1: [owner]
+    T2: [developer, owner]
+    T3: [developer, owner+step_up]
+    T4: [developer, owner+step_up]
+  delegation: { to: developer, up_to: T2 }     # T3 and T4 are never delegable (platform rule)
+  card_ttl: { T1: 72h, T2: 72h, T3: 24h, T4: 24h }
+  preview_required_from: T3
+  architect: { max_open_prs: 3, max_patch_attempts: 2 }   # then the desire goes to the developer
+
+evals:
+  suites:
+    smoke: { path: evals/smoke, runs: 1, gate: all_pass }
+    contact_center: { path: evals/contact_center, runs: 20, gate: { wilson_lb: 0.75 } }   # tolerates 1 failure in 20
+    quickshipper: { path: evals/quickshipper, runs: 5, gate: all_pass }
+    regressions: { path: evals/regressions, runs: 5, gate: all_pass }
+    sealed: { source: platform, from_tier: T2 }
+  select: blast_radius
+  calibration: { path: evals/calibration, refresh: weekly }
+
+ui:
+  theme: { brand: "#7B1E3A", radius: md, font: Noto Sans Georgian }
+  nav: [contact_center, quickshipper, customer_center]
+  views:
+    inbox: { app: contact_center, kind: chapters, group_by: status }
+    orders_board: { app: quickshipper, kind: board, object: order, group_by: status, card: [number, customer.name, total, delivery] }
+    deliveries: { app: quickshipper, kind: list, object: delivery_job, columns: [order, zone, courier, eta, status] }
+    customers: { app: customer_center, kind: table, object: customer, columns: [name, phone, segment], filters: [segment] }
+  extensions:
+    - { slot: order.card.footer, component: WineLabelCard }
