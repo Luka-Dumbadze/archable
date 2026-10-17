@@ -178,6 +178,8 @@ export function lower(r: Resolved, errors: Errors): { bundle: Lowered; projectio
     // byId: the policy files plus the generated permits; schema and facts: the context the gateway builds (cedar-schema.ts).
     policies: { byId: { ...Object.fromEntries(r.policies.map((p) => [p.id, p.text])), ...cedar.permits }, schema: cedar.schema, bounds, facts: cedar.facts },
     channels,
+    apps: Object.fromEntries(Object.entries(spec.apps).map(([id, a]) => [id, { template: a.template, agent: a.agent ?? null, channels: [...(a.channels ?? [])] }])),
+    params: Object.fromEntries(Object.entries(r.params).sort(([a], [b]) => (a < b ? -1 : 1))),
     ui: spec.ui,
     evals: {
       suites: spec.evals.suites,

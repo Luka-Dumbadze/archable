@@ -10,12 +10,29 @@ import type { CallSession, PolicyFacts } from './facts';
 import { simulate } from './simulate';
 
 export type ToolOutput = Record<string, unknown>;
-export type Executor = (input: Record<string, unknown>, ctx: { tenantId: string; env: Env; digest: string }) => Promise<ToolOutput>;
+export type Executor = (input: Record<string, unknown>, ctx: { tenantId: string; env: Env; digest: string; bundle: Bundle }) => Promise<ToolOutput>;
+
+/** A tool schema as the dialogue model sees it: Archable's annotations and read-only fields removed. */
+export function modelSchema(s: unknown): unknown {
+  if (Array.isArray(s)) return s.map(modelSchema);
+  if (!s || typeof s !== 'object') return s;
+  const o = s as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(o)) {
+    if (k.startsWith('x-') || k === 'readOnly') continue;
+    if (k === 'properties' && v && typeof v === 'object') {
+      out.properties = Object.fromEntries(Object.entries(v as Record<string, Record<string, unknown>>)
+        .filter(([, p]) => !p.readOnly).map(([name, p]) => [name, modelSchema(p)]));
+    } else out[k] = modelSchema(v);
+  }
+  if (Array.isArray(out.required) && out.properties) out.required = (out.required as string[]).filter((r) => r in (out.properties as object));
+  return out;
+}
 
 export interface GatewayDeps {
   inTenant: InTenant;
   facts: { forPolicy(tenantId: string, env: Env, bundle: Bundle, tool: string, input: Record<string, unknown>, s: CallSession): Promise<PolicyFacts> };
-  quotes: { price(tenantId: string, pin: { env: Env; digest: string }, input: Record<string, unknown>): Promise<ToolOutput> };
+  quotes: { price(tenantId: string, pin: { env: Env; digest: string }, input: Record<string, unknown>, bundle: Bundle): Promise<ToolOutput> };
   executors: Record<string, Executor>;                        // tool id → implementation (catalog, orders, couriers…)
   connectionsMode?: 'live' | 'simulate';                      // default: process.env.CONNECTIONS_MODE
   now?: () => number;
@@ -69,7 +86,7 @@ export function toolGateway(ctx: GatewayCtx, d: GatewayDeps) {
     let policyFacts: PolicyFacts = { input: rawInput, context: { approvals: [] } };
     try {
       policyFacts = await d.facts.forPolicy(tenantId, pin.env, bundle, id, rawInput, session);   // [a]
-      const quote = c.needsQuote ? await d.quotes.price(tenantId, pin, policyFacts.input) : undefined;
+      const quote = c.needsQuote ? await d.quotes.price(tenantId, pin, policyFacts.input, bundle) : undefined;
       verdict = authorize(c.action, { input: policyFacts.input, quote, ...policyFacts.context });
     } catch {
       verdict = { allow: false, reasons: ['facts_unavailable'] };        // no facts, no decision: deny
@@ -84,7 +101,7 @@ export function toolGateway(ctx: GatewayCtx, d: GatewayDeps) {
     try {
       const run = d.executors[id];
       if (!simulated && !run) throw new Error(`no executor for ${id}`);
-      const out = simulated ? simulate(c, input) : await withDeadline(run!(input, { tenantId, env: pin.env, digest: pin.digest }), bundle.deadlines.tool);
+      const out = simulated ? simulate(c, input) : await withDeadline(run!(input, { tenantId, env: pin.env, digest: pin.digest, bundle }), bundle.deadlines.tool);
       await d.inTenant(tenantId, async (tx) => {                       // [c] one transaction
         await logCall(tx, id, input, verdict, simulated ? 'simulated' : 'ok', now() - t0);
         if (chapterId && id === 'order.quote' && typeof out.total === 'number') {
@@ -111,7 +128,7 @@ export function toolGateway(ctx: GatewayCtx, d: GatewayDeps) {
   const agentTools = principal.type === 'Agent' ? bundle.agents[principal.id]?.tools ?? [] : [];
   const tools: Record<string, Tool> = Object.fromEntries(agentTools.filter((id) => bundle.tools[id]).map((id) => {
     const c = bundle.tools[id]!;
-    return [id, tool({ description: c.description, inputSchema: jsonSchema<Record<string, unknown>>(c.input as JSONSchema7), execute: (input) => call(id, input) })];
+    return [id, tool({ description: c.description, inputSchema: jsonSchema<Record<string, unknown>>(modelSchema(c.input) as JSONSchema7), execute: (input) => call(id, input) })];
   }));
 
   return { tools, call, authorize, caller, evidence: () => [...evidence] };

@@ -29,6 +29,8 @@ export interface Bundle {
   policies: { byId: Record<string, string>; schema: unknown; bounds: PolicyBound[]; facts: Record<string, ActionFacts> };
   // embed_origins is not in plan §4.3's type; the chat page needs it for frame-ancestors (plan §6.6).
   channels: Record<string, { kind: 'telegram_bot' | 'telegram_business' | 'web'; public?: WidgetConfig; embed_origins?: string[] }>;
+  apps: Record<string, { template: string; agent: string | null; channels: string[] }>;   // which agent serves which channel
+  params: Record<string, unknown>;                                      // apps.*.params, flattened: 'quickshipper.express.surcharge'
   ui: unknown;                                                          // v3 §2.4 UI projection
   graph: { nodes: GNode[]; edges: { from: string; to: string; kind: EdgeKind }[] };
   a2a: A2AGraph;

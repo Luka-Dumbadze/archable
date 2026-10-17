@@ -14,6 +14,7 @@
     "@ai-sdk/provider": "4.0.29",
     "@archable/compiler": "workspace:*",
     "@archable/contracts": "workspace:*",
+    "@archable/gateway": "workspace:*",
     "@vercel/functions": "3.10.1",
     "ai": "7.0.143",
     "postgres": "3.4.9"

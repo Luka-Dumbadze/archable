@@ -270,6 +270,9 @@ importers:
       '@archable/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@archable/gateway':
+        specifier: workspace:*
+        version: link:../gateway
       '@vercel/functions':
         specifier: 3.10.1
         version: 3.10.1
