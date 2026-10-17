@@ -15,7 +15,7 @@ metadata:
 
 runtime:
   models:                             # AI Gateway slugs; moved by the merged-PR index (T2)
-    dialogue: { model: google/gemini-3.8-flash, reasoning: none }   # was low: 10-25 s per step on Google's free tier (Q5)
+    dialogue: { model: google/gemini-3.6-flash, reasoning: none }   # was 3.8-flash, low: 10-25 s per step, then overloaded (Q5)
     vision: { model: google/gemini-3.8-flash, reasoning: medium }
     patch: { model: google/gemini-3.8-flash, reasoning: high }
     decision: { model: typesafe-ai/jev, fallback: google/gemini-3.8-flash }

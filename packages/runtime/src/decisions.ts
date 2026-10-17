@@ -122,8 +122,12 @@ export interface DecisionDeps {
   fallback?: Experimental_DecisionModelV4;
 }
 
+/** The primary answered inside an escalation band and no fallback could settle it. Keeps the answers for the log. */
 class Unsure extends Error {
-  constructor() { super('primary unsure and no fallback decision model'); this.name = 'Unsure'; }
+  constructor(readonly answers: Record<string, unknown> = {}, readonly modelId: string = PRIMARY) {
+    super('primary unsure and no fallback decision model');
+    this.name = 'Unsure';
+  }
 }
 
 export function createDecisions(d: DecisionDeps) {
@@ -146,6 +150,7 @@ export function createDecisions(d: DecisionDeps) {
     try {
       const r = await decide({ model: d.primary, state, questions, abortSignal, maxRetries: 0 });
       if (!escalates(r)) return { r, fallback: false };
+      failure = new Unsure(r.answers as Record<string, unknown>, r.response.modelId);
     } catch (e) {
       if (abortSignal.aborted) throw e;
       failure = e;
@@ -184,7 +189,9 @@ export function createDecisions(d: DecisionDeps) {
       logged([row(out.answeredBy, fallback, { intent: r.answers.intent, frustration: r.answers.frustration }, out.intent)]);
       return out;
     } catch (e) {
-      logged([row(PRIMARY, false, { error: String(e) }, e instanceof DeadlineExceeded ? 'timeout' : 'error')]);
+      logged([e instanceof Unsure
+        ? row(e.modelId, false, { ...e.answers, error: String(e) }, 'unsure')
+        : row(PRIMARY, false, { error: String(e) }, e instanceof DeadlineExceeded ? 'timeout' : 'error')]);
       return null;                                                  // I7: the dialogue model routes itself
     }
   }
@@ -226,8 +233,12 @@ export function createDecisions(d: DecisionDeps) {
         [out.grounded.verdict, out.commitment.verdict]));
       return out;
     } catch (e) {
-      const verdict = e instanceof DeadlineExceeded ? 'timeout' : 'error';
-      logged(rows(PRIMARY, false, { 'send.grounded': { error: String(e) }, 'send.commitment': { error: String(e) } }, [verdict, verdict]));
+      const verdict = e instanceof Unsure ? 'unsure' : e instanceof DeadlineExceeded ? 'timeout' : 'error';
+      const a = e instanceof Unsure ? e.answers : {};
+      logged(rows(e instanceof Unsure ? e.modelId : PRIMARY, false, {
+        'send.grounded': { ...(a.grounded as object | undefined), error: String(e) },
+        'send.commitment': { ...(a.commitment as object | undefined), error: String(e) },
+      }, [verdict, verdict]));
       return FAILED;                                                // I7: the draft is not sent
     }
   }
