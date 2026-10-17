@@ -49,7 +49,8 @@ export const archableBotDeps: ArchableBotDeps = {
   approvalSummary: async () => '',
   settle: async () => {},
   rationaleFor: async () => null,
-  ownerMessage: async () => 'Archable is still being set up. Please try again later.',
+  ownerMessage: async () => ({ text: 'Archable is still being set up. Please try again later.', buttons: [] }),
+  ownerPress: async () => null,
   publicApiOrigin: process.env.PUBLIC_API_ORIGIN ?? 'https://api.archable.run',
   newTurnId: randomUUID,
 };

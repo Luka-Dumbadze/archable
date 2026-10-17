@@ -3,6 +3,7 @@
 import { Bot, InlineKeyboard, type Context } from 'grammy';
 import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { waitUntil } from '@vercel/functions';
+import type { OwnerButton, OwnerReply } from '@archable/contracts';
 import type { Inbound } from '../runtime-stand-in';   // TODO(DEV-2 runtime types): '@archable/runtime'
 
 type Outcome = string;
@@ -27,7 +28,8 @@ export interface ArchableBotDeps {
   approvalSummary(approvalId: string): Promise<string>;       // the exact text whose digest is in the approval
   settle(changeRequestId: string): Promise<void>;             // recompute archable/approval, merge with sha, flip
   rationaleFor(ref: string, tgUserId: number): Promise<string | null>;   // null: not a member, or unknown ref
-  ownerMessage(tgUserId: number, text: string): Promise<string>;         // owner request → desire (Phase 4)
+  ownerMessage(tgUserId: number, text: string): Promise<OwnerReply>;     // owner request → normalized statement + Draft it / Not this (§7.7)
+  ownerPress(tgUserId: number, ref: string): Promise<OwnerReply | null>; // a tapped post button, by its body.ref; null: expired or not theirs
   publicApiOrigin: string;                                    // 'https://api.archable.run'
   newTurnId(): string;
 }
@@ -166,12 +168,41 @@ export function registerArchableBot(bot: Bot, d: ArchableBotDeps) {
     if (text) await ctx.reply(text);                            // a new message: the approval card stays untouched
   });
 
+  // ── Owner choices: a post button from an OwnerReply, pressed in Telegram (§7.7, §8.4) ──
+  bot.callbackQuery(/^op:([A-Za-z0-9_-]{22})$/, async (ctx) => {
+    const r = await d.ownerPress(ctx.from.id, ctx.match[1]!);
+    if (!r) return ctx.answerCallbackQuery({ text: 'This choice is no longer available' });
+    await ctx.answerCallbackQuery();
+    await ctx.editMessageReplyMarkup().catch(() => {});        // one tap per question: the buttons go away
+    await replyOwner(ctx, r);
+  });
+
   // ── Everything else the owner types is a request ──
   bot.chatType('private').on('message:text', async (ctx) => {
-    await ctx.reply(await d.ownerMessage(ctx.from.id, ctx.message.text));
+    await replyOwner(ctx, await d.ownerMessage(ctx.from.id, ctx.message.text));
   });
   bot.chatType('private').on(['message:voice', 'message:audio', 'message:video_note'], (ctx) =>
     ctx.reply('Please type your message. I work with text and buttons only.'));
+}
+
+// An OwnerReply in Telegram: url buttons open links; post buttons become `op:<body.ref>` callbacks (callback_data
+// holds 64 bytes, so the server mints a 22-char ref per button and resolves it in ownerPress). A post button
+// without a ref can't be pressed in Telegram and is left out. All buttons share one row.
+const OWNER_REF = /^[A-Za-z0-9_-]{22}$/;
+export function ownerKeyboard(buttons: OwnerButton[]): InlineKeyboard | null {
+  const kb = new InlineKeyboard();
+  let n = 0;
+  for (const b of buttons) {
+    if (b.action === 'url') { kb.url(b.label, b.url); n++; continue; }
+    const ref = b.body['ref'];
+    if (typeof ref === 'string' && OWNER_REF.test(ref)) { kb.text(b.label, `op:${ref}`); n++; }
+  }
+  return n ? kb : null;
+}
+
+function replyOwner(ctx: Context, r: OwnerReply) {
+  const kb = ownerKeyboard(r.buttons);
+  return ctx.reply(r.text, kb ? { reply_markup: kb } : {});
 }
 
 export const changeCardKeyboard = (c: { approveNonce: string; rejectNonce: string; rationaleRef: string; previewUrl: string }) =>

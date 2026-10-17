@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { Api, Bot } from "grammy";
 import type { Update, UserFromGetMe } from "grammy/types";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { registerArchableBot, type ArchableBotDeps } from "./archable-bot";
+import type { OwnerReply } from "@archable/contracts";
+import { ownerKeyboard, registerArchableBot, type ArchableBotDeps } from "./archable-bot";
 
 // The real grammY update pipeline with Telegram's API intercepted: every outgoing call is recorded and
 // answered locally. DEV-2's governance, architect and db functions are in-memory stand-ins.
@@ -16,6 +17,33 @@ const ME: UserFromGetMe = {
 const sha256 = (s: string) => createHash("sha256").update(s).digest();
 
 type Call = { method: string; payload: Record<string, unknown> };
+
+// In-memory stand-in for DEV-2's owner intake (packages/architect intake.ts, plan §7.7): a change request comes
+// back as one normalized statement with Draft it / Not this; each button's ref works once.
+const DRAFT_REF = "dR4ftD16xxxxxxxxxxxxxx", DISMISS_REF = "n0tTh1sD16xxxxxxxxxxxx";
+function fakeIntake() {
+  const open = new Map<string, OwnerReply>([
+    [DRAFT_REF, { text: "Drafting D-16. I'll send you the change to approve when it's ready.", buttons: [] }],
+    [DISMISS_REF, { text: "OK, I've dropped it. Tell me again in other words if I got it wrong.", buttons: [] }],
+  ]);
+  return {
+    ownerMessage: vi.fn(async (_u: number, text: string): Promise<OwnerReply> =>
+      /cash|courier/i.test(text)
+        ? {
+            text: "Here's what I understood:\n\n“Customers can pay the courier in cash, for orders up to 300 GEL.”\n\nShall I draft this change?",
+            buttons: [
+              { label: "Draft it", action: "post", path: "/v1/owner/desires/16/draft", body: { ref: DRAFT_REF } },
+              { label: "Not this", action: "post", path: "/v1/owner/desires/16/dismiss", body: { ref: DISMISS_REF } },
+            ],
+          }
+        : { text: `Got it: "${text}".`, buttons: [] }),
+    ownerPress: vi.fn(async (u: number, ref: string) => {
+      const r = u === OWNER ? open.get(ref) ?? null : null;
+      if (r) { open.delete(DRAFT_REF); open.delete(DISMISS_REF); }      // one answer per question
+      return r;
+    }),
+  };
+}
 
 function setup(over: Partial<ArchableBotDeps> = {}) {
   const calls: Call[] = [];
@@ -34,7 +62,7 @@ function setup(over: Partial<ArchableBotDeps> = {}) {
     approvalSummary: vi.fn(async () => "Marani OS: allow cash on delivery up to 300 GEL."),
     settle: vi.fn(async () => {}),
     rationaleFor: vi.fn(async (ref: string) => (ref === "c:AAAAAAAAAAAAAAAAAAAAAA" ? "Why: 14 customers asked to pay the courier in cash." : null)),
-    ownerMessage: vi.fn(async (_u: number, t: string) => `Got it: "${t}". Shall I draft it?`),
+    ...fakeIntake(),
     publicApiOrigin: "https://api.archable.run",
     newTurnId: () => "turn-1",
     ...over,
@@ -250,7 +278,7 @@ describe("rationale and owner text", () => {
   it("treats any other owner text as a request", async () => {
     const t = setup();
     await t.send(privateMsg("customers want to pay the courier in cash, up to 300 lari"));
-    expect(t.sent()[0]?.text).toBe('Got it: "customers want to pay the courier in cash, up to 300 lari". Shall I draft it?');
+    expect(t.sent()[0]?.text).toContain("Shall I draft this change?");
   });
 
   it("answers voice, audio and video notes with the text-only reply", async () => {
@@ -258,5 +286,68 @@ describe("rationale and owner text", () => {
     await t.send(privateMsg(undefined, OWNER, { voice: { file_id: "v", file_unique_id: "v", duration: 2 } }));
     expect(t.sent()[0]?.text).toBe("Please type your message. I work with text and buttons only.");
     expect(t.deps.ownerMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe("owner intake (P4.D1.2, plan §7.7)", () => {
+  const CHECK = "customers want to pay the courier in cash, up to 300 lari";
+
+  it("answers the check message with the normalized statement and Draft it / Not this", async () => {
+    const t = setup();
+    await t.send(privateMsg(CHECK));
+    expect(t.deps.ownerMessage).toHaveBeenCalledWith(OWNER, CHECK);
+    const [reply] = t.sent();
+    expect(reply?.text).toBe("Here's what I understood:\n\n“Customers can pay the courier in cash, for orders up to 300 GEL.”\n\nShall I draft this change?");
+    expect(reply?.reply_markup).toEqual({ inline_keyboard: [[
+      { text: "Draft it", callback_data: `op:${DRAFT_REF}` },
+      { text: "Not this", callback_data: `op:${DISMISS_REF}` },
+    ]] });
+  });
+
+  it("Draft it: answers the tap, removes the buttons, then confirms; a second tap is refused", async () => {
+    const t = setup();
+    await t.send(cb(`op:${DRAFT_REF}`));
+    expect(t.deps.ownerPress).toHaveBeenCalledWith(OWNER, DRAFT_REF);
+    expect(t.calls.map((c) => c.method)).toEqual(["answerCallbackQuery", "editMessageReplyMarkup", "sendMessage"]);
+    expect(t.calls[1]?.payload).toMatchObject({ chat_id: OWNER_CHAT, message_id: 77 });
+    expect(t.sent()[0]?.text).toBe("Drafting D-16. I'll send you the change to approve when it's ready.");
+    await t.send(cb(`op:${DISMISS_REF}`));
+    expect(t.sent("answerCallbackQuery").at(-1)).toMatchObject({ text: "This choice is no longer available" });
+    expect(t.sent()).toHaveLength(1);
+  });
+
+  it("Not this: drops it", async () => {
+    const t = setup();
+    await t.send(cb(`op:${DISMISS_REF}`));
+    expect(t.sent()[0]?.text).toBe("OK, I've dropped it. Tell me again in other words if I got it wrong.");
+  });
+
+  it("someone else can't press the owner's buttons", async () => {
+    const t = setup();
+    await t.send(cb(`op:${DRAFT_REF}`, CUSTOMER));
+    expect(t.sent("answerCallbackQuery")[0]).toMatchObject({ text: "This choice is no longer available" });
+    expect(t.sent()).toEqual([]);
+  });
+
+  it("a reply without buttons is plain text", async () => {
+    const t = setup();
+    await t.send(privateMsg("how many orders did we have today?"));
+    expect(t.sent()[0]).toEqual({ chat_id: OWNER, text: 'Got it: "how many orders did we have today?".' });
+  });
+});
+
+describe("ownerKeyboard", () => {
+  it("renders url buttons as links and post buttons by their ref, skipping post buttons without one", () => {
+    const kb = ownerKeyboard([
+      { label: "Preview", action: "url", url: "https://pr-58--marani.archable.run" },
+      { label: "Draft it", action: "post", path: "/x", body: { ref: DRAFT_REF } },
+      { label: "Web only", action: "post", path: "/y", body: {} },
+      { label: "Bad ref", action: "post", path: "/z", body: { ref: "short" } },
+    ]);
+    expect(kb?.inline_keyboard).toEqual([[
+      { text: "Preview", url: "https://pr-58--marani.archable.run" },
+      { text: "Draft it", callback_data: `op:${DRAFT_REF}` },
+    ]]);
+    expect(ownerKeyboard([])).toBeNull();
   });
 });
