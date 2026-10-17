@@ -9,6 +9,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@archable/contracts": "workspace:*",
     "hono": "4.13.13"
   },
   "devDependencies": {

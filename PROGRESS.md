@@ -62,7 +62,7 @@ Ids are `P<phase>.D<dev>.<n>`. Each developer edits only their own lines.
 ### DEV-1
 
 - [ ] **P2.D1.1** `[DEV-1: Frontend]` Owner Mode "Try as customer" console: a text box posting to `POST /v1/turns`, showing reply, `sent` and a link to the trace (plan §5.6). Check: against DEV-2's deployed API, a message returns a reply in the UI; with the API down the UI says "unavailable" instead of hanging.
-- [ ] **P2.D1.2** `[DEV-1: Frontend]` `apps/api/src/http/origin.ts` and `http/cors.ts`, verbatim from plan §6.5, with their tests ported from plan §9.3 (origin and CORS groups). Check: `pnpm --filter @archable/api test` passes the origin and CORS cases, including `https://api.archable.run` being refused.
+- [x] **P2.D1.2** `[DEV-1: Frontend]` `apps/api/src/http/origin.ts` and `http/cors.ts`, verbatim from plan §6.5, with their tests ported from plan §9.3 (origin and CORS groups). Check: `pnpm --filter @archable/api test` passes the origin and CORS cases, including `https://api.archable.run` being refused. — origin.ts and cors.ts identical to the tested plan code; 20 origin/CORS cases pass (`api.archable.run` refused by `routeOrigin` and by CORS, tenant and custom origins echoed, no credentials header, widget config `*`); workspace typecheck clean, 21/21 API tests. Added `Env` to contracts (`6fb1d07`).
 
 ---
 
@@ -178,4 +178,3 @@ A handshake is a PR from both branches into `main`, titled `H<n>: …`, merged o
 
 <!-- <task id> (DEV-x): what is needed, from whom -->
 
-- **P2.D1.2** (DEV-1): needs `apps/api` and the pnpm workspace on `main`, from DEV-2. As of 17 Oct they exist only on `feat/backend-core` (draft PR #1, titled "do not merge"); `main` is still `02ab565`.
