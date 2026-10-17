@@ -168,11 +168,11 @@ A handshake is a PR from both branches into `main`, titled `H<n>: …`, merged o
 
 <!-- Q<n> (DEV-x, time): question → decision (both initials) -->
 
-- Q1 (DEV-2, 2026-10-17): Plan §4.1 asks for two Supabase projects, `archable-dev` and `archable`. For the hackathon MVP DEV-2 created only `archable` (`zgfaxpdnoxlxeuzphtqs`). Proposal: every task that names `archable-dev` (P1.D2.3–P1.D2.10, P3.D2.*, H1) runs against `archable`; SQL suites stay inside `begin … rollback`; the dev and production Telegram bots stay separate (plan §3.3). → decision: pending (DEV-2 proposed; needs DEV-1's initials)
+- Q1 (DEV-2, 2026-10-17): Plan §4.1 asks for two Supabase projects, `archable-dev` and `archable`. For the hackathon MVP DEV-2 created only `archable` (`zgfaxpdnoxlxeuzphtqs`). Proposal: every task that names `archable-dev` (P1.D2.3–P1.D2.10, P3.D2.*, H1) runs against `archable`; SQL suites stay inside `begin … rollback`; the dev and production Telegram bots stay separate (plan §3.3). → **decision (17 Oct): accepted.** One Supabase project, `archable`. DEV-2 proposed; DEV-1: LD
 - **Q2 (DEV-1, 17 Oct 22:10): where does the Lovable web app live?** Context: P0.D1.3.
   - **Findings.** Lovable's docs describe only repo-root projects and say nothing about subdirectories ([Git sync](https://docs.lovable.dev/integrations/git-sync-overview), [GitHub](https://docs.lovable.dev/integrations/github)). A third-party guide (unverified) says Lovable expects a single root `package.json` with no workspaces. Since P0.D2.2, this repo's root `package.json` is the pnpm workspace root.
   - **Proposal (DEV-1).** Create a new Lovable project, `archable-web`, which creates its own repo (Lovable always creates a new repo on connect). Its app lives at that repo's root, and Lovable stays on that repo's `main`. In this repo, `apps/web/` is not created. The web app gets the API types by copying `packages/contracts/src/index.ts` into `src/contracts.ts`, with the source commit noted at the top. DEV-1 re-copies after every `contracts:` commit. P0.D1.1 becomes "connect `archable-web` to GitHub; Lovable stays on its `main`".
-  - **Decision (17 Oct 22:20):** accepted, Option C. `archable-web` is a separate Lovable repository; this repo has no `apps/web/`. Recorded from the team's agreement in the DEV-1 session; DEV-2 to initial: __
+  - **Decision (17 Oct 22:20):** accepted, Option C. `archable-web` is a separate Lovable repository; this repo has no `apps/web/`. DEV-1: LD; DEV-2 to initial: __
 
 ## Blocked on
 
