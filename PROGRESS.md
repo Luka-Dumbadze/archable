@@ -52,7 +52,7 @@ Ids are `P<phase>.D<dev>.<n>`. Each developer edits only their own lines.
 
 ### DEV-2
 
-- [ ] **P2.D2.1** `[DEV-2: Backend]` `packages/runtime/src/types.ts`, verbatim from plan §5.3, plus the `deliver` signature for DEV-1. Check: typecheck; announce it to DEV-1 (a `contracts:`-style commit).
+- [x] **P2.D2.1** `[DEV-2: Backend]` `packages/runtime/src/types.ts`, verbatim from plan §5.3, plus the `deliver` signature for DEV-1. Check: typecheck; announce it to DEV-1 (a `contracts:`-style commit). — 2026-10-18: `@archable/runtime` typechecks; types.ts is verbatim (identical to DEV-1's `runtime-stand-in.ts`), plus `Deliver` with plan §6.2's signature; announced in commit `contracts(runtime): …`.
 - [ ] **P2.D2.2** `[DEV-2: Backend]` `epochs.pin`, `bundles.load` (LRU by digest), `context.load` (plan §5.1). Check: a unit test confirms pin issues one query and a second load of the same digest is a cache hit.
 - [ ] **P2.D2.3** `[DEV-2: Backend]` `decisions.ts`: `route()` (plan §5.2) and `preSend()` (v3 §7.1), with decision_log writes. **First verify the `experimental_decide` field names (plan §10.1, item 1).** Check: a test with a forced timeout shows route returns null and preSend returns FAILED.
 - [ ] **P2.D2.4** `[DEV-2: Backend]` `packages/gateway`: `cedarDecide` (v3 §7.1), the amended `execute` (plan §5.5) with chapter facts, `CONNECTIONS_MODE`, and trigger caller attribution. Check: unit tests confirm a missing `context.customer` denies `order.create` with `policy_error`; `delivery.status` with the wrong phone is denied by `privacy.status_needs_phone`; `order.quote` writes `chapters.last_quote_total` in the same transaction as `tool_calls`.
