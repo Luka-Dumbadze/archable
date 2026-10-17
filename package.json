@@ -12,7 +12,10 @@
     "build": "pnpm -r --if-present build"
   },
   "devDependencies": {
+    "@supabase/supabase-js": "2.118.0",
     "@types/node": "22.20.5",
+    "supabase": "2.121.0",
+    "tsx": "4.23.15",
     "typescript": "5.9.3",
     "vitest": "5.0.5"
   }

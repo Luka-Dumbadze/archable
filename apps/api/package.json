@@ -9,7 +9,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "hono": "4.13.13"
+    "hono": "4.13.13",
+    "postgres": "3.4.9"
   },
   "devDependencies": {
     "esbuild": "0.28.2"

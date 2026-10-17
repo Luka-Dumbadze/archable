@@ -8,5 +8,11 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@cedar-policy/cedar-wasm": "4.13.0",
+    "canonicalize": "5.1.0",
+    "yaml": "2.9.1",
+    "zod": "4.6.7"
   }
 }
