@@ -13,6 +13,12 @@ const walk = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(jo
 const files = Object.fromEntries(walk(ROOT).map((p) => [relative(ROOT, p).split(sep).join('/'), readFileSync(p, 'utf8')]));
 const marani: Bundle = compile({ files }, YAML.parse(files['archable.lock']!)).bundle;
 
+
+// Thresholds as compiled from the spec, so these tests follow calibration changes (evals/calibration).
+type Head = { pass_at?: number; block_at?: number; escalate?: { probability_between?: [number, number] } };
+const G = marani.decisions['send.grounded'] as Head;
+const C = marani.decisions['send.commitment'] as Head;
+const mid = (b: [number, number]) => (b[0] + b[1]) / 2;
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
 describe('typesafeDecisionModel (POST /v1/systemone)', () => {
@@ -93,7 +99,7 @@ describe('direct primary with local fallback conditions', () => {
   });
 
   it('pre-send inside an escalation band reruns on the fallback; outside it does not', async () => {
-    const inBand = harness(async (_c, isPrimary) => (isPrimary ? pre(0.7, 0.05, 'typesafe/jev') : pre(0.95, 0.05, 'google/gemini-3.8-flash')));
+    const inBand = harness(async (_c, isPrimary) => (isPrimary ? pre(mid(G.escalate!.probability_between!), 0.05, 'typesafe/jev') : pre(0.95, 0.05, 'google/gemini-3.8-flash')));
     expect((await inBand.d.preSend(marani, draft)).grounded).toMatchObject({ verdict: 'pass', p: 0.95 });
     expect(inBand.calls.map((c) => c.primary)).toEqual([true, false]);
     const clear = harness(async () => pre(0.97, 0.02, 'typesafe/jev'));
@@ -121,7 +127,7 @@ describe('direct primary with local fallback conditions', () => {
 describe('direct primary without a fallback model (AI Gateway unavailable)', () => {
   const primary = typesafeDecisionModel({ apiKey: 'k', fetch: (async () => json(500, {})) as unknown as typeof fetch });
   const unsure = (async () => ({
-    answers: { grounded: { type: 'boolean', probability: 0.7 }, commitment: { type: 'boolean', probability: 0.05 },
+    answers: { grounded: { type: 'boolean', probability: mid(G.escalate!.probability_between!) }, commitment: { type: 'boolean', probability: 0.05 },
                intent: { type: 'choice', choice: 'catalog', probabilities: { catalog: 0.4, other: 0.6 } }, frustration: { type: 'score', score: 0 } },
     response: { modelId: 'typesafe/jev' },
   })) as never;
@@ -141,13 +147,13 @@ describe('an unsure primary is logged with its answers', () => {
     const primary = typesafeDecisionModel({ apiKey: 'k', fetch: (async () => json(500, {})) as unknown as typeof fetch });
     const rows: DecisionRow[] = [];
     const d = createDecisions({ primary, log: async (r) => { rows.push(...r); }, decide: (async () => ({
-      answers: { grounded: { type: 'boolean', probability: 0.6 }, commitment: { type: 'boolean', probability: 0.02 } },
+      answers: { grounded: { type: 'boolean', probability: mid(G.escalate!.probability_between!) }, commitment: { type: 'boolean', probability: 0.02 } },
       response: { modelId: 'typesafe/jev-1.13.0' },
     })) as never });
     const draft: Draft = { tenantId: 't', turnId: 'u', text: 'x', digest: 'sha256:' + 'a'.repeat(64), evidence: [], inReplyTo: 'y' };
     expect(await d.preSend(marani, draft)).toBe(FAILED);
     await new Promise((r) => setTimeout(r, 0));
     expect(rows.map((r) => [r.head, r.verdict, r.model, (r.answer as { probability?: number }).probability]))
-      .toEqual([['send.grounded', 'unsure', 'typesafe/jev-1.13.0', 0.6], ['send.commitment', 'unsure', 'typesafe/jev-1.13.0', 0.02]]);
+      .toEqual([['send.grounded', 'unsure', 'typesafe/jev-1.13.0', mid(G.escalate!.probability_between!)], ['send.commitment', 'unsure', 'typesafe/jev-1.13.0', 0.02]]);
   });
 });

@@ -35,7 +35,10 @@ export function systemPrompt(bundle: Bundle, agentId: string, route: Route | nul
     'If a tool call is denied, say plainly what is not possible, or hand the conversation to staff.',
     customer,
     route ? `The message most likely means: ${route.intent}${route.confidence !== null ? ` (p=${route.confidence.toFixed(2)})` : ''}.` : '',
-    'Answer in the customer’s language and script. Keep it short.',
+    // Pre-send checks are calibrated on Mkhedruli; on translit they don't separate true from false replies
+    // (evals/calibration/results/2026-10-18-jev-1.13.0.txt), so Georgian is always written in Mkhedruli.
+    'Answer in the customer’s language. Write Georgian only in Mkhedruli script (ქართული), never in Latin letters, '
+      + 'also when the customer writes Georgian in Latin letters. Keep it short.',
   ].filter(Boolean).join('\n');
 }
 
