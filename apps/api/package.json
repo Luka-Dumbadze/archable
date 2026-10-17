@@ -4,17 +4,27 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "tsx watch src/dev.ts",
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@ai-sdk/gateway": "4.0.116",
+    "@ai-sdk/google": "4.0.99",
     "@archable/contracts": "workspace:*",
+    "@archable/gateway": "workspace:*",
+    "@archable/runtime": "workspace:*",
+    "ai": "7.0.143",
     "hono": "4.13.13",
-    "postgres": "3.4.9"
+    "jose": "6.2.12",
+    "postgres": "3.4.9",
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "esbuild": "0.28.2"
+    "@hono/node-server": "2.1.5",
+    "esbuild": "0.28.2",
+    "tsx": "4.23.15"
   },
   "exports": {
     "./app": {
