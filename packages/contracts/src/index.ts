@@ -116,3 +116,10 @@ export interface Manifest {
   extension_url: string | null;
   topic: string;                     // 'tenant:<id>'
 }
+
+// ── Owner conversation (plan §8.4 addition): what a button is, so the web and Telegram render the same choices ──
+
+export type OwnerButton =
+  | { label: string; action: 'url'; url: string }
+  | { label: string; action: 'post'; path: string; body: Record<string, unknown> };
+export interface OwnerReply { text: string; buttons: OwnerButton[] }
