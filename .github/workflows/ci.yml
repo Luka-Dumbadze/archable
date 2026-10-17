@@ -1,0 +1,83 @@
+# Quality gate for main and every PR into it. The job name is the required status check (TEAM_PROTOCOL.md §3).
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Hard constraints from CLAUDE.md §3 and invariant I5. Cheap, and they fail before anything is installed.
+      - name: Invariant guard
+        shell: bash
+        run: |
+          fail=0
+          err() { echo "::error::$1"; fail=1; }
+
+          # I5: no committed env files or obvious secrets
+          if git ls-files | grep -E '(^|/)\.env($|\.)' | grep -vE '\.env\.example$'; then err "env file committed (I5)"; fi
+          if git grep -nIE '(sb_secret_[A-Za-z0-9]{20,}|service_role"?[[:space:]]*[:=][[:space:]]*"?eyJ|[0-9]{8,10}:AA[A-Za-z0-9_-]{30,}|AIza[0-9A-Za-z_-]{35}|gh[pousr]_[A-Za-z0-9]{36,})' \
+               -- ':!*.md' ':!.github/workflows/ci.yml'; then err "secret-like value committed (I5)"; fi
+
+          # No Docker
+          if git ls-files | grep -iE '(^|/)(Dockerfile|docker-compose[^/]*\.ya?ml|compose\.ya?ml)$'; then err "Docker files are not allowed"; fi
+
+          # Dependency bans: no Temporal/Kafka/K8s/graph DBs, no audio or speech-to-text
+          banned='"(@temporalio/[^"]+|kafkajs|node-rdkafka|@kubernetes/client-node|neo4j-driver|@neo4j/[^"]+|gremlin|@deepgram/sdk|@google-cloud/speech|microsoft-cognitiveservices-speech-sdk|assemblyai|whisper[^"]*|@ffmpeg[^"]*|fluent-ffmpeg)"[[:space:]]*:'
+          pkgs=$(git ls-files '*package.json')
+          if [ -n "$pkgs" ] && grep -HnE "$banned" $pkgs; then err "banned dependency (CLAUDE.md §3)"; fi
+
+          # Migrations are append-only once merged: an existing migration file may not change in a PR
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch -q --depth=1 origin "${{ github.base_ref }}"
+            changed=$(git diff --name-only --diff-filter=MDR "origin/${{ github.base_ref }}" -- supabase/migrations || true)
+            if [ -n "$changed" ]; then err "existing migrations changed: $changed (add a new migration instead)"; fi
+          fi
+
+          exit $fail
+
+      - name: Detect workspace
+        id: ws
+        shell: bash
+        run: |
+          if [ -f pnpm-workspace.yaml ] && [ -f package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No pnpm workspace yet (PROGRESS.md P0.D2.2). Only the invariant guard ran."
+          fi
+
+      - uses: pnpm/action-setup@v4
+        if: steps.ws.outputs.present == 'true'       # version comes from package.json "packageManager"
+
+      - uses: actions/setup-node@v4
+        if: steps.ws.outputs.present == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # Lovable edits package.json without updating pnpm-lock.yaml, so a frozen install would fail on every
+      # Lovable dependency change. The lockfile is still used; drift shows up in the PR diff.
+      - name: Install
+        if: steps.ws.outputs.present == 'true'
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Typecheck
+        if: steps.ws.outputs.present == 'true'
+        run: pnpm typecheck
+
+      - name: Test
+        if: steps.ws.outputs.present == 'true'
+        run: pnpm test
