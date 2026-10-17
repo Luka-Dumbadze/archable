@@ -4,10 +4,20 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "hono": "4.13.13"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  },
+  "exports": {
+    "./app": {
+      "types": "./src/app.ts",
+      "default": "./dist/app.js"
+    }
   }
 }
