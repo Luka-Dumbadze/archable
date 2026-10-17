@@ -10,6 +10,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@archable/contracts": "workspace:*"
+    "@archable/compiler": "workspace:*",
+    "@archable/contracts": "workspace:*",
+    "postgres": "3.4.9"
   }
 }

@@ -238,9 +238,15 @@ importers:
 
   packages/runtime:
     dependencies:
+      '@archable/compiler':
+        specifier: workspace:*
+        version: link:../compiler
       '@archable/contracts':
         specifier: workspace:*
         version: link:../contracts
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
 
   packages/schema:
     dependencies:
