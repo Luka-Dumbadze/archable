@@ -236,7 +236,11 @@ importers:
 
   packages/governance: {}
 
-  packages/runtime: {}
+  packages/runtime:
+    dependencies:
+      '@archable/contracts':
+        specifier: workspace:*
+        version: link:../contracts
 
   packages/schema:
     dependencies:
