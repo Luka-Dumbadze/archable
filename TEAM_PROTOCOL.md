@@ -20,7 +20,7 @@ A file has exactly one owner. Only the owner (or the owner's Claude Code) edits 
 
 | Path | Contents (plan section) |
 |---|---|
-| `apps/web/**` | the Lovable shell: Owner Mode, Developer Mode, `/chat` (plan §6.6, §8). **Lovable is the only writer of React here (I6)**: Claude Code may write types, hooks and prompts for Lovable, but not components Lovable owns. |
+| repo **`archable-web`** (all of it) | the Lovable shell: Owner Mode, Developer Mode, `/chat` (plan §6.6, §8). A separate repository (decision Q2 in `PROGRESS.md`). **Lovable is the only writer of React there (I6)**: Claude Code may write types, hooks and prompts for Lovable, but not components Lovable owns. |
 | `apps/api/src/channels/**` | `telegram/archable-bot.ts`, `telegram/tenant-bot.ts`, `telegram/send.ts`, `web/session.ts` (plan §6.2–§6.5) |
 | `apps/api/src/http/**` | `origin.ts`, `cors.ts` (plan §6.5) |
 | `apps/api/src/routes/webhooks.ts`, `routes/chat.ts`, `routes/widget.ts` | tenant-bot webhooks, chat API, widget loader and config (plan §6.2, §6.5) |
@@ -29,7 +29,7 @@ Paths in the brief are mapped onto the plan's:
 - *`apps/api/src/telegram/**`* is `apps/api/src/channels/telegram/**`.
 - *`public/widget.js`* is served by `apps/api/src/routes/widget.ts` at `/v1/widget.js`, with the `archable.run/widget.js` rewrite (plan §6.5). Serving it from the API keeps one URL for every tenant and keeps it out of Lovable's files.
 
-**If Lovable can't sync into `apps/web/`** (its documentation only describes repo-root projects), the web app is Lovable's root files, and DEV-1 owns exactly these: `src/**`, `public/**`, `index.html`, `vite.config.ts`, `tailwind.config.ts`, `postcss.config.js`, `components.json`, `tsconfig.app.json`, `tsconfig.node.json`, `eslint.config.js`, and Lovable's lockfile. DEV-1 confirms which layout applies as task P0.D1.3 in `PROGRESS.md`.
+**The web app lives in its own repository** (`archable-web`, decision Q2). Lovable's docs describe only repo-root projects, and this repo's root `package.json` is the pnpm workspace root, so the two can't share a root. There is no `apps/web/` in this repo. The web app gets the API types by copying them (see "Shared" below).
 
 ### DEV-2 owns
 
@@ -45,7 +45,7 @@ Paths in the brief are mapped onto the plan's:
 
 | Path | Rule |
 |---|---|
-| `packages/contracts/**` | The API ↔ web contract. **Add fields, never rename or remove**, until a handshake. Each change goes in its own commit `contracts: …`, which the other developer pulls before building on it. |
+| `packages/contracts/**` | The API ↔ web contract. **Add fields, never rename or remove**, until a handshake. Each change goes in its own commit `contracts: …`, which the other developer pulls before building on it. DEV-1 then copies `packages/contracts/src/index.ts` to `archable-web/src/contracts.ts`, with the header `// Copied from archable@<commit>:packages/contracts/src/index.ts. Do not edit here.` |
 | `apps/api/src/app.ts` | Route mounting. Append-only: each developer adds the lines that mount their own routes, nothing else. |
 | `package.json` (root), `pnpm-workspace.yaml`, `tsconfig.base.json` | DEV-2 creates them in P0. Afterwards, add a dependency only in your own package's `package.json`. |
 | `pnpm-lock.yaml` | Never hand-merge. On conflict: take `main`'s version, run `pnpm install`, commit the result. |
@@ -70,7 +70,7 @@ Until the real implementation lands, the consumer uses an in-memory fake with th
 
 ```
 main  ◄── PR at H1 ── PR at H2 ── PR at H3 ── PR at H4
-  ├── feat/frontend-ui   DEV-1 (Lovable is switched to this branch)
+  ├── feat/frontend-ui   DEV-1 (API channels and HTTP code; the web app is in archable-web)
   └── feat/backend-core  DEV-2
 ```
 
@@ -84,8 +84,8 @@ main  ◄── PR at H1 ── PR at H2 ── PR at H3 ── PR at H4
   EOF
   ```
 
-  Don't make the repository public as a workaround until every key that was ever committed has been rotated (P0.1).
-- **Lovable:** in the Lovable editor, switch the project's branch to `feat/frontend-ui` before the first prompt. Otherwise Lovable writes to `main`, or falls back to `lovable-sync` when it can't.
+  Don't make the repository public as a workaround until every key that was ever committed has been rotated (P0.D2.1).
+- **Lovable** works only in `archable-web` and stays on that repo's `main`; that repo has no branch protection, so Lovable never falls back to `lovable-sync`. Commits made there outside Lovable (the contracts copy) sync back into Lovable. Never force-push or rebase `archable-web`'s `main`. The Lovable project originally connected to this repo stays unused.
 - **Sync:** after every merge to `main`, both developers run `git pull origin main` on their own branch (a merge, not a rebase) before starting the next task.
 - **Commits:** `<scope>: <imperative summary>`, scope ∈ `db`, `compiler`, `runtime`, `gateway`, `api`, `telegram`, `web`, `architect`, `governance`, `contracts`, `ci`, `chore`. Each commit should keep the branch typechecking.
 - **Handshake PRs.** Title `H<n>: <name>`. The body pastes the handshake's verification output from `PROGRESS.md`. Either developer may merge once CI is green and the other has run the handshake check on their side.
@@ -133,5 +133,5 @@ Rules for the loop:
 | You need a contract field | Add it (additive only) in a `contracts:` commit, push it, tell the other developer. |
 | The other developer's code blocks you | Use a fake with the same interface, note it under **Blocked on**, keep going. |
 | A secret got committed | Rotate it first, then remove it. Deleting the file doesn't remove it from history. |
-| Lovable pushed to `lovable-sync` | Merge `lovable-sync` into `feat/frontend-ui` with a merge commit (Lovable's docs: never squash or rebase it). |
+| Lovable pushed to `lovable-sync` in `archable-web` | Merge `lovable-sync` into that repo's `main` with a merge commit (Lovable's docs: never squash or rebase it). |
 | The plan looks wrong | Write it under **Open questions**, decide together, record the decision there. Don't silently diverge. |

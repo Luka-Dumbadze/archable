@@ -19,9 +19,9 @@ Ids are `P<phase>.D<dev>.<n>`. Each developer edits only their own lines.
 
 ### DEV-1
 
-- [ ] **P0.D1.1** `[DEV-1: Frontend]` Switch the Lovable project to branch `feat/frontend-ui` (TEAM_PROTOCOL §3). Check: a trivial Lovable edit appears as a commit on `feat/frontend-ui`, not on `main` and not on `lovable-sync`.
-- [ ] **P0.D1.2** `[DEV-1: Frontend]` Create @ArchableBot (production) and @ArchableDevBot (local long polling) in @BotFather. Enable business connections ("Secretary Mode") on @ArchableBot. Check: `getMe` on both tokens returns the bot, and @ArchableBot's settings show business connections enabled.
-- [ ] **P0.D1.3** `[DEV-1: Frontend]` **Layout check (TEAM_PROTOCOL §2):** confirm whether Lovable can sync the app into `apps/web/` or only at the repo root. Record the answer under Open questions. Check: the answer and the resulting ownership set are written down, and both developers have read them.
+- [x] **P0.D1.1** `[DEV-1: Frontend]` Create the Lovable project `archable-web` and connect it to GitHub (Lovable creates the repo `archable-web`), leaving Lovable on its `main` (decision Q2). Check: a trivial Lovable edit appears as a commit on `archable-web`'s `main`; `git ls-remote` on this repo shows no Lovable commits. — `archable-web` (private) exists with Lovable commits on `main` (latest `3fb7467` "Add project README", pushed 18:48); this repo's only Lovable commits are its two creation commits (≤ 16:10, before Q1).
+- [x] **P0.D1.2** `[DEV-1: Frontend]` Create @ArchableBot (production) and @ArchableDevBot (local long polling) in @BotFather. Enable business connections ("Secretary Mode") on @ArchableBot. Check: `getMe` on both tokens returns the bot, and @ArchableBot's settings show business connections enabled. — `getMe`: @archable_prod_bot (id 8901689823) `ok: true, can_connect_to_business: true`; @archable_dev_bot (id 8343935929) `ok: true`. Tokens in `.env.local` as `ARCHABLE_BOT_TOKEN` / `ARCHABLE_DEV_BOT_TOKEN`; production is a new bot, not the old leaked `TELEGRAM_BOT_TOKEN`.
+- [x] **P0.D1.3** `[DEV-1: Frontend]` **Layout check (TEAM_PROTOCOL §2):** confirm whether Lovable can sync the app into `apps/web/` or only at the repo root. Record the answer under Open questions. Check: the answer and the resulting ownership set are written down, and both developers have read them. — Q2 decided: separate repo `archable-web`; CLAUDE.md and TEAM_PROTOCOL.md updated to match.
 
 ---
 
@@ -42,8 +42,8 @@ Ids are `P<phase>.D<dev>.<n>`. Each developer edits only their own lines.
 
 ### DEV-1
 
-- [ ] **P1.D1.1** `[DEV-1: Frontend]` Lovable shell bootstrap: Vite + React + TS + Tailwind, brand from the Marani theme (`#7B1E3A`, Noto Sans Georgian), routes `/` (Owner Mode), `/dev` (Developer Mode), `/chat`, Supabase client with the publishable key only. Check: the Lovable preview loads all three routes on a 360 px viewport; no service key appears in any built file (`grep -r service_role dist/` is empty).
-- [ ] **P1.D1.2** `[DEV-1: Frontend]` Import `@archable/contracts` types into the web app (workspace link or copied `.d.ts` if Lovable can't resolve the workspace). Check: a component typed with `Manifest` compiles in Lovable's build.
+- [ ] **P1.D1.1** `[DEV-1: Frontend]` Lovable shell bootstrap: Vite + React + TS + Tailwind, brand from the Marani theme (`#7B1E3A`, Noto Sans Georgian), routes `/` (Owner Mode), `/dev` (Developer Mode), `/chat`, Supabase client with the publishable key only. Check: the Lovable preview loads all three routes on a 360 px viewport; no service key appears in any built file (`grep -r service_role dist/` is empty). — **17 Oct, check failed on `archable-web@3fb7467`:** a single `/` route (Owner/Developer is a state toggle, no `/dev` or `/chat`); indigo + Geist theme, not Marani's; no Supabase client; the owner-facing Genesis screen says "…to GitHub". No service key, mic or voice found. Follow-up Lovable prompt given to the developer. **Re-run on `archable-web@c9bccbb`: still failing.** Fixed: `/`, `/dev`, `/chat` (+`?embed=1` compact header) routes, wine primary (oklch 0.39 0.12 7 ≈ `#7B1E3A`), Noto Sans Georgian, `src/lib/supabase.ts` (publishable key, no Lovable Cloud), no Git words on owner screens, build `.output/` has 0 `service_role`/`sb_secret_` hits, 3/3 web tests. Open: sending a chat message crashes the page (`useEffect` returns `scrollIntoView`'s Promise → `destroy is not a function`, Chrome 154); Owner Mode overflows 360 px by 5 px (Inbox/Deliveries grid items lack `min-w-0`); Developer Mode shows "TT2" (`T{d.tier}` on a tier that already starts with T).
+- [ ] **P1.D1.2** `[DEV-1: Frontend]` Copy `packages/contracts/src/index.ts` to `archable-web/src/contracts.ts` with the source-commit header (TEAM_PROTOCOL §2). Check: a component typed with `Manifest` compiles in Lovable's build, and the header's commit equals this repo's latest `contracts:` commit.
 - [ ] **P1.D1.3** `[DEV-1: Frontend]` Owner sign-in screen that accepts the one-time `/web` link token (plan §1.4), using a stubbed exchange. Check: the stubbed exchange produces a Supabase session in the browser, and a reload keeps it.
 
 ---
@@ -62,7 +62,7 @@ Ids are `P<phase>.D<dev>.<n>`. Each developer edits only their own lines.
 ### DEV-1
 
 - [ ] **P2.D1.1** `[DEV-1: Frontend]` Owner Mode "Try as customer" console: a text box posting to `POST /v1/turns`, showing reply, `sent` and a link to the trace (plan §5.6). Check: against DEV-2's deployed API, a message returns a reply in the UI; with the API down the UI says "unavailable" instead of hanging.
-- [ ] **P2.D1.2** `[DEV-1: Frontend]` `apps/api/src/http/origin.ts` and `http/cors.ts`, verbatim from plan §6.5, with their tests ported from plan §9.3 (origin and CORS groups). Check: `pnpm --filter @archable/api test` passes the origin and CORS cases, including `https://api.archable.run` being refused.
+- [x] **P2.D1.2** `[DEV-1: Frontend]` `apps/api/src/http/origin.ts` and `http/cors.ts`, verbatim from plan §6.5, with their tests ported from plan §9.3 (origin and CORS groups). Check: `pnpm --filter @archable/api test` passes the origin and CORS cases, including `https://api.archable.run` being refused. — origin.ts and cors.ts identical to the tested plan code; 20 origin/CORS cases pass (`api.archable.run` refused by `routeOrigin` and by CORS, tenant and custom origins echoed, no credentials header, widget config `*`); workspace typecheck clean, 21/21 API tests. Added `Env` to contracts (`6fb1d07`).
 
 ---
 
@@ -169,7 +169,12 @@ A handshake is a PR from both branches into `main`, titled `H<n>: …`, merged o
 <!-- Q<n> (DEV-x, time): question → decision (both initials) -->
 
 - Q1 (DEV-2, 2026-10-17): Plan §4.1 asks for two Supabase projects, `archable-dev` and `archable`. For the hackathon MVP DEV-2 created only `archable` (`zgfaxpdnoxlxeuzphtqs`). Proposal: every task that names `archable-dev` (P1.D2.3–P1.D2.10, P3.D2.*, H1) runs against `archable`; SQL suites stay inside `begin … rollback`; the dev and production Telegram bots stay separate (plan §3.3). → decision: pending (DEV-2 proposed; needs DEV-1's initials)
+- **Q2 (DEV-1, 17 Oct 22:10): where does the Lovable web app live?** Context: P0.D1.3.
+  - **Findings.** Lovable's docs describe only repo-root projects and say nothing about subdirectories ([Git sync](https://docs.lovable.dev/integrations/git-sync-overview), [GitHub](https://docs.lovable.dev/integrations/github)). A third-party guide (unverified) says Lovable expects a single root `package.json` with no workspaces. Since P0.D2.2, this repo's root `package.json` is the pnpm workspace root.
+  - **Proposal (DEV-1).** Create a new Lovable project, `archable-web`, which creates its own repo (Lovable always creates a new repo on connect). Its app lives at that repo's root, and Lovable stays on that repo's `main`. In this repo, `apps/web/` is not created. The web app gets the API types by copying `packages/contracts/src/index.ts` into `src/contracts.ts`, with the source commit noted at the top. DEV-1 re-copies after every `contracts:` commit. P0.D1.1 becomes "connect `archable-web` to GitHub; Lovable stays on its `main`".
+  - **Decision (17 Oct 22:20):** accepted, Option C. `archable-web` is a separate Lovable repository; this repo has no `apps/web/`. Recorded from the team's agreement in the DEV-1 session; DEV-2 to initial: __
 
 ## Blocked on
 
 <!-- <task id> (DEV-x): what is needed, from whom -->
+
