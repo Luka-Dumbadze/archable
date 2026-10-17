@@ -10,7 +10,11 @@
   },
   "dependencies": {
     "@archable/contracts": "workspace:*",
-    "hono": "4.13.13"
+    "@vercel/functions": "3.10.1",
+    "grammy": "1.46.0",
+    "hono": "4.13.13",
+    "jose": "6.2.12",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "esbuild": "0.28.2"

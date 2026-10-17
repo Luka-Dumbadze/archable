@@ -70,7 +70,7 @@ Ids are `P<phase>.D<dev>.<n>`. Each developer edits only their own lines.
 
 ### DEV-1
 
-- [ ] **P3.D1.1** `[DEV-1: Frontend]` `channels/web/session.ts` and `routes/chat.ts`, verbatim (plan §6.5), with the chat tests from plan §9.3. Check: tests pass (open, resume, cross-tenant, idempotent retry, 401, 400, 429).
+- [x] **P3.D1.1** `[DEV-1: Frontend]` `channels/web/session.ts` and `routes/chat.ts`, verbatim (plan §6.5), with the chat tests from plan §9.3. Check: tests pass (open, resume, cross-tenant, idempotent retry, 401, 400, 429). — session.ts verbatim and chat.ts verbatim except its `HandleTurn` import, which points at `channels/runtime-stand-in.ts` until DEV-2 publishes the runtime types; 11 vitest cases pass with in-memory fakes: open (201, 43-char secret), resume by secret (200, no new secret), cross-tenant 404, bad body 400, idempotent retry (one turn), tampered/missing token 401, empty text/bad id 400, rate limit 429, takeover 202, `/events` 401/400/staff reply.
 - [ ] **P3.D1.2** `[DEV-1: Frontend]` `routes/widget.ts`, verbatim (plan §6.5), and the `archable.run/widget.js` rewrite. Check: the loader runs in a plain HTML page on another origin and draws the branded launcher; `GET /v1/widget/config/acme` returns 404.
 - [ ] **P3.D1.3** `[DEV-1: Frontend]` `routes/webhooks.ts`, verbatim (plan §6.2), and `channels/telegram/tenant-bot.ts`. Check: the webhook tests pass (404 for unknown hooks, 401 for a bad secret, retry deduplicated).
 - [ ] **P3.D1.4** `[DEV-1: Frontend]` `channels/telegram/send.ts`: `deliver()` for bot, Business, suggest mode and web; 429 retry; a 403 pauses the channel (plan §6.2). Check: unit tests with a fake `Api` cover each `ReplyTarget` kind and the 429 path.
@@ -177,4 +177,6 @@ A handshake is a PR from both branches into `main`, titled `H<n>: …`, merged o
 ## Blocked on
 
 <!-- <task id> (DEV-x): what is needed, from whom -->
+
+- **P3.D1.1, P3.D1.3, P3.D1.4** (DEV-1, not blocking): `packages/runtime/src/types.ts` (plan §5.3) from DEV-2. Until it lands, `apps/api/src/channels/runtime-stand-in.ts` holds a verbatim copy; when it does, DEV-1 deletes the stand-in and restores the `@archable/runtime` imports.
 
