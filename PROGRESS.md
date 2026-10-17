@@ -29,7 +29,7 @@ Ids are `P<phase>.D<dev>.<n>`. Each developer edits only their own lines.
 
 ### DEV-2
 
-- [ ] **P1.D2.1** `[DEV-2: Backend]` `supabase/migrations/20261017000000_archable_v3.sql`, byte-identical to v3 §8. Check: `diff` against the SQL block extracted from the blueprint is empty.
+- [x] **P1.D2.1** `[DEV-2: Backend]` `supabase/migrations/20261017000000_archable_v3.sql`, byte-identical to v3 §8. Check: `diff` against the SQL block extracted from the blueprint is empty. — 2026-10-17: `diff` empty and `cmp` identical against v3 §8 (lines 1640–2334), also on the git-stored versions; 695 lines.
 - [ ] **P1.D2.2** `[DEV-2: Backend]` `supabase/migrations/20261018000000_archable_v3_1_ingress_rationale.sql` from plan §4.2. Check: identical to the plan's block.
 - [ ] **P1.D2.3** `[DEV-2: Backend]` `supabase link` + `supabase db push` to `archable-dev`; set the plane role passwords; store `DATABASE_URL_RUNTIME` and `DATABASE_URL_CONTROL` (plan §4.1, steps 2, 3 and 5). Check: `select rolname, rolbypassrls from pg_roles where rolname like 'archable_%'` gives two rows, both `false`.
 - [ ] **P1.D2.4** `[DEV-2: Backend]` `supabase/tests/v3.sql` and `v3_1.sql` adapted to real Supabase objects (no stubs), run inside `begin … rollback`. Check: both print their PASSED line against `archable-dev`.
