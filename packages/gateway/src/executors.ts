@@ -5,7 +5,19 @@ import type { Bundle } from '@archable/compiler';
 import type { InTenant, Tx } from './db';
 import type { Executor, ToolOutput } from './gateway';
 
-type Line = { wine: string; qty: number; unit_price?: number };
+type Line = Record<string, unknown> & { qty: number; unit_price?: number };
+
+/**
+ * The catalog this bundle sells from: the object catalog.search reads ('wine' for Marani, 'product' for a shop), and
+ * the field of an order line that refers to it ('wine', 'product'). Read from the bundle, so no tool names an object.
+ */
+export function catalogOf(b: Bundle): { object: string; lineField: string } {
+  const object = (b.tools['catalog.search']?.reads[0] ?? 'wine.').split('.')[0]!;
+  const items = (b.objects.order?.schema.properties as Record<string, { items?: { properties?: Record<string, { 'x-archable'?: { ref?: { object?: string } } }> } }> | undefined)
+    ?.lines?.items?.properties ?? {};
+  const lineField = Object.entries(items).find(([, p]) => p['x-archable']?.ref?.object === object)?.[0] ?? object;
+  return { object, lineField };
+}
 
 /** DEV-1's sender (Deliver in @archable/runtime): Telegram bot, Business, web; returns the recorded messages.id. */
 export type NotifyDeliver = (target: { kind: 'telegram'; channelId: string; botId: number; tokenSecret: string; chatId: number },
@@ -38,15 +50,17 @@ export function createExecutors(inTenant: InTenant, o: { deliver?: NotifyDeliver
   const surchargeOf = expressSurcharge;
 
   async function price(tx: Tx, tenantId: string, env: string, lines: Line[], delivery: string, discountPct: number, bundle: Bundle) {
-    const skus = [...new Set(lines.map((l) => l.wine))];
-    const wines = await tx<Row[]>`select id, natural_key, attrs from public.records
-                                   where tenant_id = ${tenantId} and env = ${env} and entity_type = 'wine' and natural_key in ${tx(skus)}`;
-    const bySku = new Map(wines.map((w) => [w.natural_key!, w.attrs]));
+    const { object, lineField } = catalogOf(bundle);
+    const skus = [...new Set(lines.map((l) => String(l[lineField])))];
+    const items = await tx<Row[]>`select id, natural_key, attrs from public.records
+                                   where tenant_id = ${tenantId} and env = ${env} and entity_type = ${object} and natural_key in ${tx(skus)}`;
+    const bySku = new Map(items.map((w) => [w.natural_key!, w.attrs]));
     const priced = lines.map((l) => {
-      const w = bySku.get(l.wine);
-      if (!w) throw new Error(`unknown wine ${l.wine}`);
-      if (typeof w.stock === 'number' && w.stock < l.qty) throw new Error(`only ${w.stock} of ${l.wine} in stock`);
-      return { wine: l.wine, qty: l.qty, unit_price: Number(w.price) };
+      const sku = String(l[lineField]);
+      const w = bySku.get(sku);
+      if (!w) throw new Error(`unknown ${object} ${sku}`);
+      if (typeof w.stock === 'number' && w.stock < l.qty) throw new Error(`only ${w.stock} of ${sku} in stock`);
+      return { [lineField]: sku, qty: l.qty, unit_price: Number(w.price) };
     });
     const subtotal = priced.reduce((s, l) => s + l.qty * l.unit_price, 0);
     const surcharge = delivery === 'express' ? surchargeOf(bundle) : 0;
@@ -61,17 +75,18 @@ export function createExecutors(inTenant: InTenant, o: { deliver?: NotifyDeliver
 
   return {
     'catalog.search': (input, c) => inTenant(c.tenantId, async (tx) => {
+      const { object } = catalogOf(c.bundle);
       const q: string | null = typeof input.query === 'string' && input.query.trim() ? `%${input.query.trim()}%` : null;
-      const grape: string | null = typeof input.grape === 'string' ? input.grape : null;
       const maxPrice: number | null = typeof input.max_price === 'number' ? input.max_price : null;
+      // Every other string input names a field of the catalog object (grape for wine, category for a shop): exact match.
+      const exact = Object.entries(input).filter(([k, v]) => k !== 'query' && k !== 'max_price' && typeof v === 'string') as [string, string][];
       const rows: Row[] = await tx<Row[]>`
         select id, natural_key, attrs from public.records
-         where tenant_id = ${c.tenantId} and env = ${c.env} and entity_type = 'wine'
-           and (${q}::text is null or attrs ->> 'label' ilike ${q} or natural_key ilike ${q} or attrs ->> 'grape' ilike ${q})
-           and (${grape}::text is null or attrs ->> 'grape' = ${grape})
+         where tenant_id = ${c.tenantId} and env = ${c.env} and entity_type = ${object}
+           and (${q}::text is null or attrs::text ilike ${q} or natural_key ilike ${q})
            and (${maxPrice}::bigint is null or (attrs ->> 'price')::bigint <= ${maxPrice})
-         order by attrs ->> 'label' limit 10`;
-      return { items: rows.map((r) => r.attrs) };
+         order by attrs ->> 'label' limit 50`;
+      return { items: rows.filter((r) => exact.every(([k, v]) => r.attrs[k] === v)).slice(0, 10).map((r) => r.attrs) };
     }),
 
     'order.quote': quote,
