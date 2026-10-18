@@ -1,0 +1,56 @@
+[
+  {
+    "sku": "APL-IP15-128",
+    "label": "Apple iPhone 15 128GB",
+    "category": "phones",
+    "brand": "Apple",
+    "warranty_months": 12,
+    "price": 279900,
+    "stock": 14
+  },
+  {
+    "sku": "SMS-S24-256",
+    "label": "Samsung Galaxy S24 256GB",
+    "category": "phones",
+    "brand": "Samsung",
+    "warranty_months": 24,
+    "price": 249900,
+    "stock": 9
+  },
+  {
+    "sku": "LNV-T14-16",
+    "label": "Lenovo ThinkPad T14 16GB",
+    "category": "laptops",
+    "brand": "Lenovo",
+    "warranty_months": 24,
+    "price": 359900,
+    "stock": 5
+  },
+  {
+    "sku": "LG-OLED55-C3",
+    "label": "LG OLED55 C3 TV",
+    "category": "tvs",
+    "brand": "LG",
+    "warranty_months": 24,
+    "price": 389900,
+    "stock": 4
+  },
+  {
+    "sku": "SNY-WH1000XM5",
+    "label": "Sony WH-1000XM5 headphones",
+    "category": "audio",
+    "brand": "Sony",
+    "warranty_months": 12,
+    "price": 99900,
+    "stock": 20
+  },
+  {
+    "sku": "DYS-V15",
+    "label": "Dyson V15 Detect vacuum",
+    "category": "appliances",
+    "brand": "Dyson",
+    "warranty_months": 24,
+    "price": 189900,
+    "stock": 6
+  }
+]
