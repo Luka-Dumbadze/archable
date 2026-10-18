@@ -11,7 +11,7 @@ import { createDevStore } from "./devmode-store";
 import { desireRoutes } from "./routes/desires";
 import { createDesireStore } from "./desire-store";
 import { registerGithubHandlers } from "./github-handlers";
-import { sharedArchitect, telegramCardSender } from "./architect-wiring";
+import { sharedArchitect, telegramOwnerDeps } from "./architect-wiring";
 import { cronRoutes } from "./routes/cron";
 import { githubWebhookRoutes } from "./routes/github";
 import { turnRoutes } from "./routes/turn";
@@ -55,7 +55,7 @@ if (process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY && githubWeb
   }
   // DEV-2: the Architect's queues, drained by Vercel Cron and kicked by enqueuers (P4.D2.8). Needs Jev (TYPESAFE_API_KEY).
   const architect = process.env.TYPESAFE_API_KEY
-    ? sharedArchitect({ app: github, log, ...(process.env.ARCHABLE_BOT_TOKEN ? { send: telegramCardSender(process.env.ARCHABLE_BOT_TOKEN) } : {}) }) : null;
+    ? sharedArchitect({ app: github, log, ...(process.env.ARCHABLE_BOT_TOKEN ? telegramOwnerDeps(process.env.ARCHABLE_BOT_TOKEN) : {}) }) : null;
   registerGithubHandlers(github, { control: controlDb, log, ...(architect ? { kick: architect.kick } : {}) });   // P4.D2.7
   app.route("/", githubWebhookRoutes({ app: github, log }));
   if (architect) app.route("/", cronRoutes({ secret: process.env.CRON_SECRET, drain: architect.drain }));
