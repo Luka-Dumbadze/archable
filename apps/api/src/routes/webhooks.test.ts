@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import type { Update } from "grammy/types";
-import type { Inbound } from "../channels/runtime-stand-in";
+import type { Inbound } from "@archable/runtime";
 import { tenantBotDispatcher, type NoticeKind } from "../channels/telegram/tenant-bot";
 import { telegramWebhookRoutes, type BotHook, type WebhookDeps } from "./webhooks";
 

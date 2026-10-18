@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { ChatMessage, ChatSessionResponse, Env } from '@archable/contracts';
-import type { HandleTurn } from '../channels/runtime-stand-in';   // TODO(DEV-2 runtime types): '@archable/runtime'
+import type { HandleTurn } from '@archable/runtime';
 import { hashSecret, isSecret, mintChatToken, newSecret, verifyChatToken, type ChatClaims } from '../channels/web/session';
 
 export interface ChatDeps {

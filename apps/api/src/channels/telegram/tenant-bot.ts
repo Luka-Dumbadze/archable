@@ -2,7 +2,7 @@
 // Plan §6.2, completed: handleTurn and the notice sender are injected (DEV-2's turn engine, send.ts).
 import { randomUUID } from 'node:crypto';
 import type { Update } from 'grammy/types';
-import type { HandleTurn, ReplyTarget } from '../runtime-stand-in';   // TODO(DEV-2 runtime types): '@archable/runtime'
+import type { HandleTurn, ReplyTarget } from '@archable/runtime';
 import type { BotHook } from '../../routes/webhooks';
 
 export type NoticeKind = 'text_only' | 'greeting';

@@ -4,7 +4,7 @@ import { Bot, InlineKeyboard, type Context } from 'grammy';
 import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { waitUntil } from '@vercel/functions';
 import type { OwnerButton, OwnerReply } from '@archable/contracts';
-import type { Inbound } from '../runtime-stand-in';   // TODO(DEV-2 runtime types): '@archable/runtime'
+import type { Inbound } from '@archable/runtime';
 
 type Outcome = string;
 export interface ArchableBotDeps {

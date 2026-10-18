@@ -2,7 +2,7 @@
 // Plan §6.2, completed: Vault, the messages table and the channel pause are injected (DEV-2's db wrappers).
 // The token is read from Vault at the last hop, per send; it is never cached, returned or logged.
 import { Api, GrammyError } from 'grammy';
-import type { ReplyTarget } from '../runtime-stand-in';   // TODO(DEV-2 runtime types): '@archable/runtime'
+import type { ReplyTarget } from '@archable/runtime';
 import type { BotHook } from '../../routes/webhooks';
 import type { NoticeKind } from './tenant-bot';
 

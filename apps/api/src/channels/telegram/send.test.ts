@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { GrammyError } from "grammy";
 import { describe, expect, it, vi } from "vitest";
-import type { ReplyTarget } from "../runtime-stand-in";
+import type { ReplyTarget } from "@archable/runtime";
 import type { BotHook } from "../../routes/webhooks";
 import { createSender, type SendDeps } from "./send";
 
