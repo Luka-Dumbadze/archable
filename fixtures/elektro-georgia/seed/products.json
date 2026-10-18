@@ -1,0 +1,74 @@
+[
+  {
+    "sku": "SAMS-001",
+    "label": "Galaxy A55 5G 128GB",
+    "category": "phones",
+    "brand": "Samsung",
+    "warranty_months": 24,
+    "price": 119900,
+    "stock": 6
+  },
+  {
+    "sku": "XIAO-002",
+    "label": "Redmi Note 13 256GB",
+    "category": "phones",
+    "brand": "Xiaomi",
+    "warranty_months": 12,
+    "price": 69900,
+    "stock": 8
+  },
+  {
+    "sku": "LENO-003",
+    "label": "IdeaPad Slim 3 15.6-inch",
+    "category": "laptops",
+    "brand": "Lenovo",
+    "warranty_months": 24,
+    "price": 169900,
+    "stock": 4
+  },
+  {
+    "sku": "ACER-004",
+    "label": "Aspire 5 15.6-inch",
+    "category": "laptops",
+    "brand": "Acer",
+    "warranty_months": 24,
+    "price": 199900,
+    "stock": 3
+  },
+  {
+    "sku": "SONY-005",
+    "label": "WH-CH520 Wireless Headphones",
+    "category": "headphones",
+    "brand": "Sony",
+    "warranty_months": 12,
+    "price": 14900,
+    "stock": 10
+  },
+  {
+    "sku": "JBL-006",
+    "label": "Tune 510BT Wireless Headphones",
+    "category": "headphones",
+    "brand": "JBL",
+    "warranty_months": 12,
+    "price": 12900,
+    "stock": 8
+  },
+  {
+    "sku": "SAMS-007",
+    "label": "43-inch 4K UHD Smart TV",
+    "category": "tvs",
+    "brand": "Samsung",
+    "warranty_months": 24,
+    "price": 109900,
+    "stock": 3
+  },
+  {
+    "sku": "TCL-008",
+    "label": "50-inch 4K UHD Smart TV",
+    "category": "tvs",
+    "brand": "TCL",
+    "warranty_months": 24,
+    "price": 119900,
+    "stock": 3
+  }
+]

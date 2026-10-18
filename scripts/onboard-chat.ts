@@ -121,7 +121,7 @@ try {
   // The first name whose repository doesn't exist yet (a repo the App made can't be deleted by it).
   const repoExists = async (s: string) => (await fetch(`https://api.github.com/repos/archable-tenants/${s}`)).status === 200;
   let slug = base;
-  for (const s of [base, `${base}-ge`, `${base}-tbilisi`, `${base}-shop`, `${base}-store`, `${base}-georgia`, `${base}-tech`, `${base}-plus`, `${base}-${Date.now() % 1000}`]) { slug = s; if (!(await repoExists(s))) break; }
+  for (const s of [base, `${base}-ge`, `${base}-tbilisi`, `${base}-shop`, `${base}-store`, `${base}-georgia`, `${base}-tech`, `${base}-plus`, `${base}-pro`, `${base}-hub`, `${base}-mart`, `${base}-online`, `${base}-${Date.now() % 1000}`]) { slug = s; if (!(await repoExists(s))) break; }
   const os = `${p.short_name} OS`;
   const files: Record<string, string> = {};
   const pr = await progress(`Building ${os} for ${p.business_name}`);
