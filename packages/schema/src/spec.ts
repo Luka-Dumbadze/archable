@@ -26,6 +26,8 @@ export interface Field {
   index?: 'range';
   generated?: string;
   derived?: string;
+  label?: Record<string, string>;
+  value_labels?: Record<string, Record<string, string>>;
 }
 
 export const Field: z.ZodType<Field> = z.lazy(() =>
@@ -45,8 +47,13 @@ export const Field: z.ZodType<Field> = z.lazy(() =>
     index: z.literal('range').optional(),
     generated: z.string().optional(),                                     // 'M-{seq:5}'
     derived: z.string().optional(),                                       // CEL; never written by a model
+    label: Localized.optional(),                                          // { en: 'payment method' } (PROGRESS.md Q7)
+    value_labels: z.record(Key, Localized).optional(),                    // enum value → { en: 'cash on delivery' }
   }).superRefine((f, ctx) => {
     if (f.type === 'enum' && !f.values) ctx.addIssue({ code: 'custom', message: 'enum needs values' });
+    for (const v of Object.keys(f.value_labels ?? {})) {
+      if (!f.values?.includes(v)) ctx.addIssue({ code: 'custom', message: `value_labels names "${v}", which is not a value` });
+    }
     if (f.type === 'ref' && !f.to) ctx.addIssue({ code: 'custom', message: 'ref needs to' });
     if (f.type === 'list' && !f.of) ctx.addIssue({ code: 'custom', message: 'list needs of' });
   }),
@@ -56,6 +63,7 @@ const ObjectDef = z.strictObject({
   key: Key,
   title: Key,
   source: z.literal('evidence').optional(),
+  label: Localized.optional(),
   fields: z.record(Key, Field),
 });
 
@@ -107,6 +115,7 @@ export const Effect = z.enum(['none', 'internal', 'notify', 'external', 'money']
 
 const Tool = z.strictObject({
   app: Key.optional(),                                                    // owner; overrides the template manifest (plan §1.5)
+  label: Localized.optional(),                                            // { en: 'courier booking' } (Q7)
   description: z.string(),
   input: z.record(Key, z.string()),                                       // field → type expression ('order.lines', 'money?')
   output: z.record(Key, z.string()).optional(),

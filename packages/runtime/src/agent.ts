@@ -20,7 +20,9 @@ export function agentFor(bundle: Bundle, inbound: Pick<Inbound, 'channel'>): str
   throw new NoAgent(inbound.channel);
 }
 
-export function systemPrompt(bundle: Bundle, agentId: string, route: Route | null, ctx: TurnContext, now = new Date()): string {
+// terms: the bundle's business terms (PROGRESS.md Q10), the same text the pre-send check receives as evidence, so what
+// the agent may state and what the check accepts are one list.
+export function systemPrompt(bundle: Bundle, agentId: string, route: Route | null, ctx: TurnContext, now = new Date(), terms: string[] = []): string {
   const a = bundle.agents[agentId]!;
   const m = bundle.metadata;
   const customer = ctx.customer
@@ -31,7 +33,10 @@ export function systemPrompt(bundle: Bundle, agentId: string, route: Route | nul
     '',
     `Business: ${m.name} (${m.os_name}). Time zone ${m.timezone}; now ${now.toISOString()}.`,
     `Money in tool inputs and results is an integer number of minor units (100 = 1 ${m.currency}). Always state amounts in ${m.currency} with two decimals: 3500 is 35.00 ${m.currency}.`,
-    'Only state prices, stock, delivery times and policies that a tool returned in this conversation. Never promise a discount, refund, gift or delivery time a tool did not grant.',
+    terms.length
+      ? 'Only state prices, stock, delivery times and policies that a tool returned in this conversation or that the business terms below state. Never promise a discount, refund, gift or delivery time a tool did not grant.'
+      : 'Only state prices, stock, delivery times and policies that a tool returned in this conversation. Never promise a discount, refund, gift or delivery time a tool did not grant.',
+    ...(terms.length ? [`Business terms:\n${terms.map((t) => `- ${t}`).join('\n')}`] : []),
     'If a tool call is denied, say plainly what is not possible, or hand the conversation to staff.',
     customer,
     route ? `The message most likely means: ${route.intent}${route.confidence !== null ? ` (p=${route.confidence.toFixed(2)})` : ''}.` : '',

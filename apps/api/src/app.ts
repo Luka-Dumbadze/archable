@@ -2,6 +2,13 @@ import { randomUUID } from "node:crypto";
 import { githubApp } from "@archable/governance";
 import { Hono } from "hono";
 import { memberFromJwt } from "./auth";
+import { controlDb, runtimeDb } from "./db";
+import { bundleRoutes } from "./routes/bundles";
+import { manifestRoutes } from "./routes/manifest";
+import { createShellStore } from "./shell-store";
+import { registerGithubHandlers } from "./github-handlers";
+import { createArchitect } from "./architect-wiring";
+import { cronRoutes } from "./routes/cron";
 import { githubWebhookRoutes } from "./routes/github";
 import { turnRoutes } from "./routes/turn";
 import { createTurnEngine } from "./turn-wiring";
@@ -14,6 +21,11 @@ app.get("/healthz", (c) => c.json({ ok: true }));
 // DEV-2: console turns (plan §5.6)
 app.route("/", turnRoutes({ memberFromJwt, handleTurn: createTurnEngine(), newTurnId: randomUUID }));
 
+// DEV-2: shell boot (v3 §2.4, plan §8.2): the manifest by origin, and a digest's UI projection for a member (P5.D2.1).
+const shell = createShellStore(runtimeDb);
+app.route("/", manifestRoutes(shell.manifest));
+app.route("/", bundleRoutes({ memberFromJwt, uiProjection: shell.uiProjection }));
+
 // DEV-2: the archable-architect App's webhook (plan §7.1). Mounted only when the App is configured; the
 // pull_request, pull_request_review and push handlers (ledger, card supersede) come with P4.D2.6 and P4.D2.7.
 // GITHUB_WEBHOOK_SECRET is the canonical name; GITHUB_SECRET is accepted so existing .env files keep working.
@@ -25,5 +37,9 @@ if (process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY && githubWeb
   for (const name of ['pull_request', 'pull_request_review', 'push'] as const) {
     github.webhooks.on(name, ({ id }) => log(`github.${name}`, { delivery: id }));
   }
+  // DEV-2: the Architect's queues, drained by Vercel Cron and kicked by enqueuers (P4.D2.8). Needs Jev (TYPESAFE_API_KEY).
+  const architect = process.env.TYPESAFE_API_KEY ? createArchitect({ app: github, log }) : null;
+  registerGithubHandlers(github, { control: controlDb, log, ...(architect ? { kick: architect.kick } : {}) });   // P4.D2.7
   app.route("/", githubWebhookRoutes({ app: github, log }));
+  if (architect) app.route("/", cronRoutes({ secret: process.env.CRON_SECRET, drain: architect.drain }));
 }

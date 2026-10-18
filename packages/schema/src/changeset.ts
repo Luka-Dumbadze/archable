@@ -10,8 +10,9 @@ export const Op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('set'), path: Path, value: Scalar, expect: Scalar.nullable() }),
   z.object({ op: z.literal('add_enum'), path: Path, value: z.string(), label: z.string() }),
   z.object({ op: z.literal('add_field'), object: z.string(), field: z.string(), type: z.string(), optional: z.boolean() }),
-  z.object({ op: z.literal('add_policy'), file: z.string(), id: z.string(), cedar: z.string() }),
-  z.object({ op: z.literal('edit_persona'), agent: z.string(), find: z.string(), replace: z.string() }),
+  // summary: the one line the owner reads for this op (PROGRESS.md Q7); the op itself is what is applied.
+  z.object({ op: z.literal('add_policy'), file: z.string(), id: z.string(), cedar: z.string(), summary: z.string().max(140).optional() }),
+  z.object({ op: z.literal('edit_persona'), agent: z.string(), find: z.string(), replace: z.string(), summary: z.string().max(140).optional() }),
   z.object({ op: z.literal('add_eval'), suite: z.string(), id: z.string(), yaml: z.string() }),
 ]);
 
