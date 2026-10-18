@@ -29,17 +29,17 @@ describe('blastRadius (v3 §3.5, §3.6)', () => {
     expect(r).toMatchObject({ tier: 0, changed: [], why: [] });
   });
 
-  // v3 §3.6 says T1, but on Marani's graph Cellar Master may also call customer.upsert, which no policy bounds:
-  // it writes customer.address, which delivery.dispatch sends outside (T3). PROGRESS.md Q8.
-  it.skip('"make Cellar Master warmer" is T1: may_invoke is cut at bounded tools', () => {
+  it('"make Cellar Master warmer" is T1: may_invoke is cut at bounded tools', () => {
     const r = radiusOf((f) => { f['personas/cellar_master.md'] += '\nBe warm and welcoming.\n'; });
     expect(r.tier).toBe(1);
     expect(r.changed).toEqual(['persona:cellar_master']);
     expect(r.why).toEqual([{ tier: 1, rule: 'persona.text', path: ['persona:cellar_master'] }]);
-    expect(r.reached).not.toContain('run|tool:order.create');          // bounded by order.* forbids
+    expect(r.reached.filter((k) => k.endsWith('|tool:order.create'))).toEqual([]);   // bounded by order.* forbids
+    expect(r.reached).toContain('call|tool:handoff.staff');            // called, but its other agent isn't reached (Q8)
+    expect(r.reached.filter((k) => k.endsWith('|agent:dispatch_node'))).toEqual([]);
   });
 
-  it.skip('adding optional wine.tasting_notes is T1 (Q8: reaches customer.upsert through catalog.search and the agent)', () => {
+  it('adding optional wine.tasting_notes is T1', () => {
     const r = radiusOf((f) => replace(f, 'enterprise.spec.yaml', '      stock: { type: integer, min: 0, index: range }',
       '      stock: { type: integer, min: 0, index: range }\n      tasting_notes: { type: string, optional: true }'));
     expect(r).toMatchObject({ tier: 1, changed: ['field:wine.tasting_notes'], delta: { 'field:wine.tasting_notes': 'field.add_optional' } });

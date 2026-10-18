@@ -7,7 +7,8 @@
 //   approvals  Set<String> of approvals present for this call ([] until staff approvals exist)
 //   quote      the order.quote output, when the action's policies read context.quote
 //   <object>   a record of that object, when the action's policies read context.<object>: its fields, plus
-//              <ref>_<key> for every ref field (order.customer → customer_phone)
+//              <ref>_<key> for every ref field (order.customer → customer_phone). Optional when the tool writes that
+//              object, since the record may not exist yet (Q8).
 // Context of message.send: payload_digest and signals.<head> = {verdict, payload_digest} per pre-send decision.
 import type { Field, Spec } from '@archable/schema';
 import { validate, type Schema } from '@cedar-policy/cedar-wasm/nodejs';
@@ -134,7 +135,10 @@ export function cedarArtifacts(spec: Spec, policies: ParsedPolicy[], errors: Err
         continue;
       }
       objects.push({ attr: object, object, via: via[0], by: via[1].replace(/\?$/, '') === object ? 'id' : 'key' });
-      context[object] = factRecord(spec, object);
+      // A record of an object this tool writes may not exist yet (customer.upsert creates the customer): the attribute
+      // is optional, so a policy must ask `context has <object>` and a new record isn't denied as a missing fact (Q8).
+      const writesIt = (tool.writes ?? []).some((w) => w.split('.')[0] === object);
+      context[object] = writesIt ? attr(factRecord(spec, object), false) : factRecord(spec, object);
     }
     facts[id] = { objects, defaults, keyInputs, quote };
     actions[id] = { appliesTo: appliesTo({ type: 'Record', attributes: context }) };

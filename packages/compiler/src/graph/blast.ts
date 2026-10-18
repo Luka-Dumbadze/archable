@@ -166,7 +166,9 @@ export function contextRefs(spec: Spec, action: string, path: string): string[] 
 
 // ── blast radius (v3 §3.5) ──
 
-type Mode = 'def' | 'run';
+// def: the node's definition changed; run: its runtime behavior or data may change; call: a tool reached only because
+// an agent may now call it differently (PROGRESS.md Q8, an amendment to v3 §3.5's table).
+type Mode = 'def' | 'run' | 'call';
 export type GraphData = { nodes: GNode[]; edges: GEdge[] };
 export interface RiskRules { floors: Record<string, Tier>; changeRules: Record<string, Tier>; cutAtBoundedTools: boolean }
 export interface Reason { tier: Tier; rule: string; path: string[] }
@@ -182,9 +184,11 @@ export interface BlastRadius {
 const STEP: Record<EdgeKind, Partial<Record<Mode, Mode>>> = {
   read_by: { def: 'run', run: 'run' },
   written_by: { def: 'def' },              // a field's definition changes its writers' contracts
-  writes: { run: 'run' },                  // only a behavior change alters the values written
+  writes: { run: 'run', call: 'run' },     // only a behavior change alters the values written
+  // A tool called differently doesn't change the agents that share it (Q8): `call` stops here, so a persona edit no
+  // longer reaches a co-agent's tools through a shared handoff.staff. A tool whose data or definition changed does.
   contract_of: { def: 'run', run: 'run' },
-  may_invoke: { run: 'run' },              // LLM-mediated: cut at bounded tools
+  may_invoke: { run: 'call' },             // LLM-mediated: cut at bounded tools
   guards: { def: 'run', run: 'run' },
   configures: { def: 'run' },
   informs: { def: 'run', run: 'run' },

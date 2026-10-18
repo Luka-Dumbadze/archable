@@ -36,7 +36,8 @@ const toImpact = (r: ImpactRow): DesireImpact => ({
 /** The bounds of policies in Δ or bounding a tool reached in run mode: the card's caps. */
 export function boundsFor(bundle: Bundle, radius: Pick<VerifyRun['radius'], 'changed' | 'reached'>) {
   const changedPolicies = new Set(radius.changed.filter((n) => n.startsWith('policy:')).map((n) => n.slice(7)));
-  const reachedTools = new Set(radius.reached.filter((k) => k.startsWith('run|tool:')).map((k) => k.slice(9)));
+  // A tool reached in run mode, or called (`call|`, Q8): its caps bound the change either way.
+  const reachedTools = new Set(radius.reached.filter((k) => /^(run|call)\|tool:/.test(k)).map((k) => k.slice(k.indexOf('|tool:') + 6)));
   return bundle.policies.bounds.filter((b) => changedPolicies.has(b.policy) || reachedTools.has(b.action));
 }
 
