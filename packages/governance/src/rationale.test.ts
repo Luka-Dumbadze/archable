@@ -98,6 +98,17 @@ describe('rationale card (plan §7.5)', () => {
     expect(c.impact.map((x) => x.text)).toEqual(['No sales figure: no linked chat reached a price.']);
   });
 
+  it('counts of one read in the singular, and one day is "on <day>" (Q9)', () => {
+    const one = { chapters: 1, customers: 1, quoted: 1, abandoned: 1, abandoned_value: 6000, ordered: 0,
+                  first_seen: '2026-10-17T08:00:00Z', last_seen: '2026-10-17T15:00:00Z' };
+    const text = renderRationale(buildChangeRationale({ ...D14, impact: one,
+      verification: { suites: { regressions: { passes: 1, runs: 1 } }, new_cases: 0, elva_drift: 'none' } }));
+    expect(text).toContain('· 1 customer chat from 1 customer on 17 Oct was about this.');
+    expect(text).toContain('· 1 of 1 customer who got a price did not order: 60 GEL in baskets.');
+    expect(text).toContain('· 1 of 1 check passed.');
+    expect(text).not.toMatch(/chats? from 1 customers|never reached a price/);
+  });
+
   it('money is GEL from integer tetri', () => {
     expect([money(14000, 'GEL'), money(3550, 'GEL'), money(5, 'GEL')]).toEqual(['140 GEL', '35.50 GEL', '0.05 GEL']);
   });

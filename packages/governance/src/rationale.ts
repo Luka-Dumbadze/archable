@@ -60,6 +60,10 @@ export function money(tetri: number, currency: string) {
 const day = (iso: string) =>
   new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Asia/Tbilisi' });
 
+// Deviation from plan §7.5's text (PROGRESS.md Q9): counts of one take the singular, and a span within one day is
+// "on <day>". Every plural sentence renders exactly as the plan's.
+const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
 export function buildChangeRationale(i: ChangeRationaleInput): RationaleCard {
   const f = (text: string, source: string): RationaleFact => ({ text, source });
   const L = i.labels;
@@ -69,9 +73,10 @@ export function buildChangeRationale(i: ChangeRationaleInput): RationaleCard {
     trigger.push(f(`You asked for this on ${day(i.ownerRequest.at)}: “${i.ownerRequest.text}”`, `desire D-${i.desire.number}, owner message`));
   }
   if (i.impact.chapters > 0) {
-    const span = i.impact.first_seen && i.impact.last_seen
-      ? ` between ${day(i.impact.first_seen)} and ${day(i.impact.last_seen)}` : '';
-    trigger.push(f(`${i.impact.chapters} customer chats from ${i.impact.customers} customers${span} were about this.`,
+    const [from, to] = [i.impact.first_seen && day(i.impact.first_seen), i.impact.last_seen && day(i.impact.last_seen)];
+    const span = from && to ? (from === to ? ` on ${from}` : ` between ${from} and ${to}`) : '';
+    trigger.push(f(`${count(i.impact.chapters, 'customer chat', 'customer chats')} from ${count(i.impact.customers, 'customer', 'customers')}${span} `
+      + `${i.impact.chapters === 1 ? 'was' : 'were'} about this.`,
       'desire_chapters: linked by Jev, unlinkable by owner or developer'));
   } else if (!i.ownerRequest) {
     trigger.push(f(i.desire.statement, `desire D-${i.desire.number} (${i.desire.source})`));
@@ -79,7 +84,7 @@ export function buildChangeRationale(i: ChangeRationaleInput): RationaleCard {
 
   const impact: RationaleFact[] = [];
   if (i.impact.quoted > 0) {
-    impact.push(f(`${i.impact.abandoned} of ${i.impact.quoted} customers who got a price did not order: ` +
+    impact.push(f(`${i.impact.abandoned} of ${count(i.impact.quoted, 'customer', 'customers')} who got a price did not order: ` +
       `${money(i.impact.abandoned_value, L.currency)} in baskets.`,
       `chapters.last_quote_total, no order ${i.quietHours} h after the quote`));
     impact.push(f('That is what those customers were quoted, not a forecast.', 'rendering rule'));
@@ -109,7 +114,8 @@ export function buildChangeRationale(i: ChangeRationaleInput): RationaleCard {
   const passes = s.reduce((a, x) => a + x.passes, 0);
   const runs = s.reduce((a, x) => a + x.runs, 0);
   const verification: RationaleFact[] = [
-    f(`${passes} of ${runs} checks passed, ${i.verification.new_cases} of them new.`, 'archable/verify on this version'),
+    f(`${passes} of ${count(runs, 'check', 'checks')} passed${i.verification.new_cases ? `, ${i.verification.new_cases} of them new` : ''}.`,
+      'archable/verify on this version'),
     f({ none: 'What outside agents can call is unchanged.', non_breaking: 'Outside agents gain new options; nothing they use changes.',
         breaking: 'Outside agents that call this business must be updated.', unknown: 'The outside-agent contract was not checked.' }[i.verification.elva_drift],
       'Elva contract drift'),
