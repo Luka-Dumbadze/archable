@@ -18,7 +18,7 @@ export interface CallSession {
 export interface PolicyFacts { input: Record<string, unknown>; context: Record<string, unknown> }
 
 type Row = { id: string; natural_key: string | null; attrs: Record<string, unknown> };
-type ObjectSchema = { properties?: Record<string, { 'x-archable'?: { ref?: { object: string; by?: string } } }> };
+type ObjectSchema = { properties?: Record<string, { default?: unknown; 'x-archable'?: { ref?: { object: string; by?: string } } }> };
 
 const NO_FACTS: ActionFacts = { objects: [], defaults: {}, keyInputs: {}, quote: false };
 
@@ -49,8 +49,11 @@ export function createFacts(inTenant: InTenant) {
         for (const load of plan.objects) {
           const r = await record(tx, tenantId, env, load.object, load.by, filled[load.via]);
           if (!r) continue;                                    // absent: Cedar rejects the request
-          const fact: Record<string, unknown> = { ...r.attrs };
           const props = (bundle.objects[load.object]?.schema as ObjectSchema | undefined)?.properties ?? {};
+          // Records store what was written; the spec's field defaults (age_verified: false) apply when a field is absent,
+          // or the context would miss a required attribute and Cedar would reject every call for that record.
+          const defaults = Object.fromEntries(Object.entries(props).filter(([, p]) => p.default !== undefined).map(([k, p]) => [k, p.default]));
+          const fact: Record<string, unknown> = { ...defaults, ...r.attrs };
           for (const [field, p] of Object.entries(props)) {
             const ref = p['x-archable']?.ref;
             if (!ref) continue;

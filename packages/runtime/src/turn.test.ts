@@ -139,7 +139,7 @@ describe('handleTurn (plan §5.4)', () => {
     let seen: Draft | undefined;
     const e = engine({
       generate: (async (o: { tools: Record<string, { execute: (i: unknown) => Promise<unknown> }> }) => {
-        await o.tools['catalog.search']!.execute({ query: 'saperavi' });
+        await o.tools['catalog_search']!.execute({ query: 'saperavi' });
         return { text: 'Marani Saperavi 2021 is 35.00 GEL.' };
       }) as never,
       preSend: (d) => { seen = d; return pass(d); },

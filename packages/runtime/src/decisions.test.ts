@@ -54,7 +54,7 @@ describe('route', () => {
     expect(q.intent).toMatchObject({ type: 'choice', criteria: (marani.decisions['route.intent'] as { criteria: object }).criteria });
     expect(typeof q.intent!.instructions).toBe('string');
     expect(q.frustration).toEqual({ type: 'score', instructions: 'How frustrated is the customer?', criteria: ['calm', 'impatient', 'frustrated', 'angry'] });
-    expect(h.calls[0]!.providerOptions).toEqual({ gateway: { models: [{ model: 'google/gemini-3.8-flash', when: { question: 'intent', confidenceBelow: 0.6 } }] } });
+    expect(h.calls[0]!.providerOptions).toEqual({ gateway: { models: [{ model: marani.models.decision.fallback, when: { question: 'intent', confidenceBelow: 0.6 } }] } });
     expect(h.calls[0]!.maxRetries).toBe(0);
 
     await flush();
@@ -106,7 +106,7 @@ describe('preSend', () => {
     });
     expect(h.calls).toHaveLength(1);
     expect(Object.keys(h.calls[0]!.questions)).toEqual(['grounded', 'commitment']);
-    expect(h.calls[0]!.providerOptions).toEqual({ gateway: { models: [{ model: 'google/gemini-3.8-flash', when: { any: [
+    expect(h.calls[0]!.providerOptions).toEqual({ gateway: { models: [{ model: marani.models.decision.fallback, when: { any: [
       { question: 'grounded', probabilityBetween: G.escalate!.probability_between },
       { question: 'commitment', probabilityBetween: C.escalate!.probability_between },
     ] } }] } });

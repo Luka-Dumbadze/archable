@@ -9,3 +9,4 @@ export { agentFor, holdingReply, NoAgent, systemPrompt } from './agent';
 export { displayMoney, draftOf, textDigest, type Evidence } from './drafts';
 export { createStore, type Conversation, type Store } from './store';
 export { createHandleTurn, type TurnDeps } from './turn';
+export { llmDecisionModel } from './llm-decision';

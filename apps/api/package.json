@@ -12,6 +12,7 @@
   "dependencies": {
     "@ai-sdk/gateway": "4.0.116",
     "@ai-sdk/google": "4.0.99",
+    "@ai-sdk/openai": "4.0.96",
     "@archable/contracts": "workspace:*",
     "@archable/gateway": "workspace:*",
     "@archable/runtime": "workspace:*",

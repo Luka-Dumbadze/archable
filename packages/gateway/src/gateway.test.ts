@@ -96,6 +96,13 @@ describe('Cedar errors deny (I3)', () => {
     expect(await minor.gw.call('order.create', orderInput('aaaaaaaa-0000-4000-8000-0000000000e2'))).toEqual({ denied: true, policies: ['order.age_gate'] });
   });
 
+  it('a record without its defaulted fields still satisfies the schema (age_verified: false applies)', async () => {
+    records.push({ id: 'aaaaaaaa-0000-4000-8000-0000000000e9', entity_type: 'customer', natural_key: '+995555000333',
+                   attrs: { name: 'Test Customer', phone: '+995555000333' } });                // as customer.upsert writes it
+    const { gw } = gateway({}, { 'order.create': async () => ({ order: { id: ORDER } }) });
+    expect(await gw.call('order.create', orderInput('aaaaaaaa-0000-4000-8000-0000000000e9'))).toEqual({ denied: true, policies: ['order.age_gate'] });
+  });
+
   it('the discount cap reads the filled default and the model’s value', async () => {
     const { gw } = gateway({}, { 'order.create': async () => ({ order: { id: ORDER } }) });
     expect(await gw.call('order.create', { ...orderInput(NINO), discount_pct: 50 })).toEqual({ denied: true, policies: ['order.discount_cap'] });
@@ -181,7 +188,7 @@ describe('simulation and caller attribution', () => {
   it('agents are attributed as agent:<id>, and their AI SDK tools are exactly agents.*.tools', () => {
     const { gw } = gateway();
     expect(gw.caller).toBe('agent:cellar_master');
-    expect(Object.keys(gw.tools).sort()).toEqual(['catalog.search', 'customer.upsert', 'delivery.status', 'handoff.staff', 'order.create', 'order.quote']);
+    expect(Object.keys(gw.tools).sort()).toEqual(['catalog_search', 'customer_upsert', 'delivery_status', 'handoff_staff', 'order_create', 'order_quote']);
   });
 });
 

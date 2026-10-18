@@ -119,7 +119,8 @@ export interface DecisionDeps {
   primary?: Experimental_DecisionModelV4;
   // The decision model that answers when the primary is unsure or fails. A language model can't be called as a
   // decision model (the gateway refuses), so without one an escalation is "unsure": route fails open, pre-send closed.
-  fallback?: Experimental_DecisionModelV4;
+  // A function receives the bundle's models.decision.fallback slug, so the spec names the fallback.
+  fallback?: Experimental_DecisionModelV4 | ((slug: string) => Experimental_DecisionModelV4 | undefined);
 }
 
 /** The primary answered inside an escalation band and no fallback could settle it. Keeps the answers for the log. */
@@ -155,8 +156,9 @@ export function createDecisions(d: DecisionDeps) {
       if (abortSignal.aborted) throw e;
       failure = e;
     }
-    if (!d.fallback) throw failure;
-    const r = await decide({ model: d.fallback, state, questions, abortSignal, maxRetries: 0 });
+    const fallbackModel = typeof d.fallback === 'function' ? (fb ? d.fallback(fb) : undefined) : d.fallback;
+    if (!fallbackModel) throw failure;
+    const r = await decide({ model: fallbackModel, state, questions, abortSignal, maxRetries: 0 });
     return { r, fallback: true };
   }
   const now = d.now ?? (() => performance.now());

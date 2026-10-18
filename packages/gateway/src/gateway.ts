@@ -126,9 +126,11 @@ export function toolGateway(ctx: GatewayCtx, d: GatewayDeps) {
   }
 
   const agentTools = principal.type === 'Agent' ? bundle.agents[principal.id]?.tools ?? [] : [];
+  // Models see each tool under its operation_id ('catalog_search'): OpenAI allows only [a-zA-Z0-9_-] in tool names.
+  // Every call is mapped back to the tool id, so Cedar, tool_calls and the A2A graph keep 'catalog.search'.
   const tools: Record<string, Tool> = Object.fromEntries(agentTools.filter((id) => bundle.tools[id]).map((id) => {
     const c = bundle.tools[id]!;
-    return [id, tool({ description: c.description, inputSchema: jsonSchema<Record<string, unknown>>(modelSchema(c.input) as JSONSchema7), execute: (input) => call(id, input) })];
+    return [c.operation_id, tool({ description: c.description, inputSchema: jsonSchema<Record<string, unknown>>(modelSchema(c.input) as JSONSchema7), execute: (input) => call(id, input) })];
   }));
 
   return { tools, call, authorize, caller, evidence: () => [...evidence] };

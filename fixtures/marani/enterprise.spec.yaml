@@ -15,10 +15,10 @@ metadata:
 
 runtime:
   models:                             # AI Gateway slugs; moved by the merged-PR index (T2)
-    dialogue: { model: google/gemini-3.6-flash, reasoning: none }   # was 3.8-flash, low: 10-25 s per step, then overloaded (Q5)
+    dialogue: { model: openai/gpt-6-luna, reasoning: none }   # was google/gemini-3.6-flash: Google overloads and quotas (Q5)
     vision: { model: google/gemini-3.8-flash, reasoning: medium }
     patch: { model: google/gemini-3.8-flash, reasoning: high }
-    decision: { model: typesafe-ai/jev, fallback: google/gemini-3.8-flash }
+    decision: { model: typesafe-ai/jev, fallback: openai/gpt-6-luna }   # was google/gemini-3.8-flash (Q5)
   deadlines_ms: { route: 600, dialogue: 8000, pre_send: 2000, tool: 2000 }   # dialogue was 4000; covers Tbilisi-Frankfurt dev latency (Q5)
 
 roles:                                # what each role may do; the members themselves are rows in Postgres
