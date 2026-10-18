@@ -45,10 +45,6 @@ describe.skipIf(!live)('approval cards against archable', { timeout: 30_000 }, (
     });
   });
   afterAll(async () => {
-    await inT(async (tx) => {
-      await tx`delete from public.approvals where tenant_id = ${tenant}`;            // approver has no on-delete (Q6)
-      await tx`delete from public.tenants where id = ${tenant}`;
-    });
     await control.end();
   });
 
@@ -107,6 +103,14 @@ describe.skipIf(!live)('approval cards against archable', { timeout: 30_000 }, (
     const byHead = await inT((tx) => tx<{ status: string; h: string }[]>`select status, left(head_sha, 1) as h from public.approvals
       where change_request_id = ${crId} and left(head_sha, 1) in ('d', 'e')`);
     expect(byHead).toEqual([{ status: 'superseded', h: 'd' }]);                    // altered: kept, not pending; failed: gone
+  });
+
+  it('a tenant with approvals can be deleted: they go with its memberships (Q6)', async () => {
+    const before = await inT((tx) => tx<{ n: number }[]>`select count(*)::int as n from public.approvals where tenant_id = ${tenant}`);
+    expect(before[0]!.n).toBeGreaterThan(0);
+    await inT((tx) => tx`delete from public.tenants where id = ${tenant}`);
+    const after = await inT((tx) => tx<{ n: number }[]>`select count(*)::int as n from public.approvals where tenant_id = ${tenant}`);
+    expect(after[0]!.n).toBe(0);
   });
 
   it('T0 needs no card', async () => {
