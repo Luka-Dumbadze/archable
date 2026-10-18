@@ -7,7 +7,10 @@ import { parseArgs } from 'node:util';
 import { createClient } from '@supabase/supabase-js';
 import { controlDb, withTenant } from '../apps/api/src/db';
 
-const { values } = parseArgs({ options: { tenant: { type: 'string', default: 'marani' }, role: { type: 'string', default: 'owner' } } });
+// --tg picks one member by Telegram id when a role has several (e.g. two owners); without it, the oldest.
+const { values } = parseArgs({ options: { tenant: { type: 'string', default: 'marani' }, role: { type: 'string', default: 'owner' },
+                                          tg: { type: 'string' } } });
+const tg = values.tg ? Number(values.tg) : null;
 const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const anon = process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -22,8 +25,9 @@ const admin = createClient(url, service, { auth: { persistSession: false, autoRe
 const member = await withTenant(controlDb, tenantId, async (tx) => {
   const [m] = await tx<{ id: string; user_id: string | null; tg_user_id: string | null }[]>`
     select id, user_id, tg_user_id from public.memberships
-     where tenant_id = ${tenantId} and role = ${values.role!} and revoked_at is null order by created_at limit 1`;
-  if (!m) throw new Error(`no live ${values.role} membership on ${values.tenant}`);
+     where tenant_id = ${tenantId} and role = ${values.role!} and revoked_at is null
+       and (${tg}::bigint is null or tg_user_id = ${tg}) order by created_at limit 1`;
+  if (!m) throw new Error(`no live ${values.role} membership on ${values.tenant}${tg ? ` for Telegram ${tg}` : ''}`);
   if (m.user_id) return { ...m, user_id: m.user_id };
   const email = `tg-${m.tg_user_id ?? m.id}@users.archable.run`;
   const created = await admin.auth.admin.createUser({ email, email_confirm: true });

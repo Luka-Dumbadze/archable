@@ -10,6 +10,13 @@ import { controlDb } from './db';
 import { createQueueDrainer } from './queue-drain';
 import { createLanguageModels, createTriggerDrainer, createTurnEngine } from './turn-wiring';
 
+// One Architect per process: app.ts (cron, GitHub) and channels/live.ts (@ArchableBot's Draft it) share its drain.
+let shared: ReturnType<typeof createArchitect> | null = null;
+export function sharedArchitect(o: Parameters<typeof createArchitect>[0]) {
+  shared ??= createArchitect(o);
+  return shared;
+}
+
 export function createArchitect(o: { app: App; send?: CardDeps['send']; log(event: string, data: Record<string, unknown>): void }) {
   if (!process.env.TYPESAFE_API_KEY) throw new Error('the Architect needs TYPESAFE_API_KEY (Jev decides and judges)');
   const author: AuthorDeps = {
