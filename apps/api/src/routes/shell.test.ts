@@ -19,6 +19,11 @@ describe('GET /v1/manifest (plan §8.2)', () => {
     expect(await (await get('https://os.marani.ge')).json()).toMatchObject({ digest: 'sha256:live' });
     expect(asked).toEqual(['marani/prod', 'marani/pr-58']);
   });
+  it('uses the shared frontend request query to select a tenant', async () => {
+    const r = await m.request('/v1/manifest?biz=kutaisi', { headers: { origin: 'https://archable.lovable.app' } });
+    expect(r.status).toBe(404);
+    expect(asked.at(-1)).toBe('kutaisi/prod');
+  });
   it('cached 5 s at the edge, varied by Origin', async () => {
     const r = await get('https://marani.archable.run');
     expect(r.headers.get('cache-control')).toBe('public, max-age=0, s-maxage=5');

@@ -19,9 +19,9 @@ const memberships = {
   },
 };
 
-export async function memberFromJwt(authorization: string | undefined, origin: string | undefined): Promise<Member | null> {
+export async function memberFromJwt(authorization: string | undefined, origin: string | undefined, requestUrl?: string | URL): Promise<Member | null> {
   if (!authorization?.startsWith('Bearer ')) return null;
-  const r = routeOrigin(origin);                                // the tenant is the origin's, never a body field
+  const r = routeOrigin(origin, requestUrl);                    // the tenant is the origin or an approved frontend query hint
   if (!r) return null;
   try {
     const { payload } = await jwtVerify(authorization.slice(7), keys(), { audience: 'authenticated' });

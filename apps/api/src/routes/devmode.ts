@@ -6,7 +6,7 @@ import type { Member } from './turn';
 import type { Tx } from '../db';
 
 export interface DevDeps {
-  memberFromJwt(authorization: string | undefined, origin: string | undefined): Promise<Member | null>;
+  memberFromJwt(authorization: string | undefined, origin: string | undefined, requestUrl?: string | URL): Promise<Member | null>;
   activeBundle(tenantId: string): Promise<{
     git_sha: string; a2a: A2AGraph;
     tools: Record<string, { description: string; input: JsonSchema; output: JsonSchema | null; operation_id: string }>;
@@ -20,7 +20,7 @@ export interface DevDeps {
 export function devRoutes(d: DevDeps) {
   const app = new Hono<{ Variables: { member: Member } }>();
   app.use('/v1/dev/*', async (c, next) => {
-    const m = await d.memberFromJwt(c.req.header('authorization'), c.req.header('origin'));
+    const m = await d.memberFromJwt(c.req.header('authorization'), c.req.header('origin'), c.req.url);
     if (!m || m.role === 'staff') return c.json({ error: 'forbidden' }, 403);
     c.set('member', m);
     await next();
