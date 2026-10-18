@@ -2,6 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["fra1"],
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
-  "functions": { "api/index.ts": { "maxDuration": 800 } },
-  "crons": [{ "path": "/v1/cron/drain", "schedule": "* * * * *" }]
+  "functions": { "api/index.ts": { "maxDuration": 60 } },
+  "crons": [{ "path": "/v1/cron/drain", "schedule": "0 3 * * *" }]
 }
