@@ -10,7 +10,9 @@ import { parseArgs } from 'node:util';
 import { App } from 'octokit';
 import { controlDb, withTenant } from '../apps/api/src/db';
 
-const { values } = parseArgs({ options: { tenant: { type: 'string', default: 'marani' }, org: { type: 'string', default: 'archable-tenants' } } });
+// --from: the fixture tree to provision from (default fixtures/<tenant>); scratch tenants reuse fixtures/marani.
+const { values } = parseArgs({ options: { tenant: { type: 'string', default: 'marani' }, org: { type: 'string', default: 'archable-tenants' },
+                                          from: { type: 'string' } } });
 const slug = values.tenant!, org = values.org!;
 const appId = Number(process.env.GITHUB_APP_ID);
 if (!appId || !process.env.GITHUB_APP_PRIVATE_KEY) throw new Error('set GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY');
@@ -53,7 +55,7 @@ if (!repo) {
 } else step(`${repo.full_name} exists`);
 
 // 2. The tree: fixtures/<slug> as one commit on main, unless main already has exactly this tree.
-const root = `fixtures/${slug}`;
+const root = values.from ?? `fixtures/${slug}`;
 const walk = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : [join(d, f)]));
 const files = walk(root).map((p) => ({ path: relative(root, p).split(sep).join('/'), content: readFileSync(p, 'utf8').replace(/\r\n/g, '\n') }));
 const blobSha = (s: string) => { const b = Buffer.from(s, 'utf8'); return createHash('sha1').update(`blob ${b.length}\0`).update(b).digest('hex'); };
@@ -65,10 +67,10 @@ if (!same) {
   const tree = (await gh.request('POST /repos/{owner}/{repo}/git/trees', { owner: org, repo: slug,
     tree: files.map((f) => ({ path: f.path, mode: '100644' as const, type: 'blob' as const, content: f.content })) })).data;
   const commit = (await gh.request('POST /repos/{owner}/{repo}/git/commits', { owner: org, repo: slug, tree: tree.sha, parents: [],
-    message: `${slug}: initial tenant tree from fixtures/${slug}\n\nProvisioned by archable-architect (plan §7.1).` })).data;
+    message: `${slug}: initial tenant tree from ${root}\n\nProvisioned by archable-architect (plan §7.1).` })).data;
   await gh.request('PATCH /repos/{owner}/{repo}/git/refs/{ref}', { owner: org, repo: slug, ref: 'heads/main', sha: commit.sha, force: true });
   step(`main = ${commit.sha.slice(0, 7)} (${files.length} files)`);
-} else step(`main already holds fixtures/${slug} (${files.length} files)`);
+} else step(`main already holds ${root} (${files.length} files)`);
 
 // 3. The ruleset (after the tree: it forbids force-pushes to main).
 const rulesets = (await gh.request('GET /repos/{owner}/{repo}/rulesets', { owner: org, repo: slug })).data;

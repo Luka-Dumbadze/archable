@@ -69,7 +69,7 @@ export function trailersFor(cr: CrRow, ledger: (LedgerRow & { approver_label: st
     ...(cr.bundle_digest ? [`Archable-Bundle: ${cr.bundle_digest}`] : []),
     ...ledger.filter((r) => r.status === 'approved' && r.head_sha === cr.head_sha).map((r) => r.role === 'developer'
       ? `Reviewed-by: ${r.approver_label} on ${head}`
-      : `Approved-by: owner (${r.approver_label}) via ${r.channel}${r.confirm_mode === 'tap' ? '' : `+${r.confirm_mode}`} on ${head}`),
+      : `Approved-by: ${r.approver_label} via ${r.channel}${r.confirm_mode === 'tap' ? '' : `+${r.confirm_mode}`} on ${head}`),
   ].join('\n');
 }
 
