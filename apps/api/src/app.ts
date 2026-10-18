@@ -4,6 +4,8 @@ import { Hono } from "hono";
 import { memberFromJwt } from "./auth";
 import { controlDb } from "./db";
 import { registerGithubHandlers } from "./github-handlers";
+import { createArchitect } from "./architect-wiring";
+import { cronRoutes } from "./routes/cron";
 import { githubWebhookRoutes } from "./routes/github";
 import { turnRoutes } from "./routes/turn";
 import { createTurnEngine } from "./turn-wiring";
@@ -27,6 +29,9 @@ if (process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY && githubWeb
   for (const name of ['pull_request', 'pull_request_review', 'push'] as const) {
     github.webhooks.on(name, ({ id }) => log(`github.${name}`, { delivery: id }));
   }
-  registerGithubHandlers(github, { control: controlDb, log });   // supersede on push, developer reviews → settle (P4.D2.7)
+  // DEV-2: the Architect's queues, drained by Vercel Cron and kicked by enqueuers (P4.D2.8). Needs Jev (TYPESAFE_API_KEY).
+  const architect = process.env.TYPESAFE_API_KEY ? createArchitect({ app: github, log }) : null;
+  registerGithubHandlers(github, { control: controlDb, log, ...(architect ? { kick: architect.kick } : {}) });   // P4.D2.7
   app.route("/", githubWebhookRoutes({ app: github, log }));
+  if (architect) app.route("/", cronRoutes({ secret: process.env.CRON_SECRET, drain: architect.drain }));
 }
