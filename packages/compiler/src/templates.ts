@@ -11,7 +11,7 @@ export interface TemplateManifest {
 export const TEMPLATES: Record<string, TemplateManifest> = {
   'tpl.contact_center@3': {
     tools: ['catalog.search', 'order.quote', 'order.create', 'handoff.staff'],
-    objects: ['wine', 'order'],
+    objects: ['wine', 'product', 'order'],
     moneyParams: [],
   },
   'tpl.dispatch@2': {

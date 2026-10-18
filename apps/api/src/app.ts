@@ -11,11 +11,14 @@ import { createDevStore } from "./devmode-store";
 import { desireRoutes } from "./routes/desires";
 import { createDesireStore } from "./desire-store";
 import { registerGithubHandlers } from "./github-handlers";
-import { createArchitect } from "./architect-wiring";
+import { sharedArchitect } from "./architect-wiring";
 import { cronRoutes } from "./routes/cron";
 import { githubWebhookRoutes } from "./routes/github";
 import { turnRoutes } from "./routes/turn";
-import { createTurnEngine } from "./turn-wiring";
+import { createLanguageModels, createTurnEngine } from "./turn-wiring";
+import { typesafeDecisionModel } from "@archable/runtime";
+import { createGovernanceDeps } from "./governance-deps";
+import { ownerRoutes } from "./routes/owner";
 
 // Route mounting is append-only (TEAM_PROTOCOL.md §2): each developer adds the lines for their own routes.
 export const app = new Hono();
@@ -44,6 +47,7 @@ app.route("/", devRoutes(createDevStore(runtimeDb, { memberFromJwt, ...(process.
 // pull_request, pull_request_review and push handlers (ledger, card supersede) come with P4.D2.6 and P4.D2.7.
 // GITHUB_WEBHOOK_SECRET is the canonical name; GITHUB_SECRET is accepted so existing .env files keep working.
 const githubWebhookSecret = process.env.GITHUB_WEBHOOK_SECRET ?? process.env.GITHUB_SECRET;
+let governed: { app: ReturnType<typeof githubApp>; kick?: () => void } | null = null;   // for Owner Mode below
 if (process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY && githubWebhookSecret) {
   const github = githubApp({ GITHUB_APP_ID: process.env.GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY: process.env.GITHUB_APP_PRIVATE_KEY,
                              GITHUB_WEBHOOK_SECRET: githubWebhookSecret });
@@ -52,9 +56,20 @@ if (process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY && githubWeb
     github.webhooks.on(name, ({ id }) => log(`github.${name}`, { delivery: id }));
   }
   // DEV-2: the Architect's queues, drained by Vercel Cron and kicked by enqueuers (P4.D2.8). Needs Jev (TYPESAFE_API_KEY).
-  const architect = process.env.TYPESAFE_API_KEY ? createArchitect({ app: github, log }) : null;
+  const architect = process.env.TYPESAFE_API_KEY ? sharedArchitect({ app: github, log }) : null;
   registerGithubHandlers(github, { control: controlDb, log, ...(architect ? { kick: architect.kick } : {}) });   // P4.D2.7
   app.route("/", githubWebhookRoutes({ app: github, log }));
   if (architect) app.route("/", cronRoutes({ secret: process.env.CRON_SECRET, drain: architect.drain }));
+  governed = { app: github, ...(architect ? { kick: architect.kick } : {}) };
+}
+
+// DEV-2: Owner Mode on the web (plan §8.4, P5.D2.3): the same owner conversation as @ArchableBot. Needs Jev.
+if (process.env.TYPESAFE_API_KEY) {
+  const owner = createGovernanceDeps({
+    control: controlDb, app: governed?.app ?? null, ...(governed?.kick ? { kick: governed.kick } : {}),
+    intake: { jev: typesafeDecisionModel({ apiKey: process.env.TYPESAFE_API_KEY }),
+              lane: { model: createLanguageModels()(process.env.OWNER_INTAKE_MODEL ?? 'openai/gpt-6-luna') } },
+  });
+  app.route("/", ownerRoutes({ memberFromJwt, ...owner }));
 }
 
