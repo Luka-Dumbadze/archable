@@ -16,9 +16,11 @@ app.route("/", turnRoutes({ memberFromJwt, handleTurn: createTurnEngine(), newTu
 
 // DEV-2: the archable-architect App's webhook (plan §7.1). Mounted only when the App is configured; the
 // pull_request, pull_request_review and push handlers (ledger, card supersede) come with P4.D2.6 and P4.D2.7.
-if (process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY && process.env.GITHUB_WEBHOOK_SECRET) {
+// GITHUB_WEBHOOK_SECRET is the canonical name; GITHUB_SECRET is accepted so existing .env files keep working.
+const githubWebhookSecret = process.env.GITHUB_WEBHOOK_SECRET ?? process.env.GITHUB_SECRET;
+if (process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY && githubWebhookSecret) {
   const github = githubApp({ GITHUB_APP_ID: process.env.GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY: process.env.GITHUB_APP_PRIVATE_KEY,
-                             GITHUB_WEBHOOK_SECRET: process.env.GITHUB_WEBHOOK_SECRET });
+                             GITHUB_WEBHOOK_SECRET: githubWebhookSecret });
   const log = (event: string, data: Record<string, unknown>) => console.log(JSON.stringify({ event, ...data }));
   for (const name of ['pull_request', 'pull_request_review', 'push'] as const) {
     github.webhooks.on(name, ({ id }) => log(`github.${name}`, { delivery: id }));
