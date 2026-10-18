@@ -10,7 +10,8 @@ import type { CallSession, PolicyFacts } from './facts';
 import { simulate } from './simulate';
 
 export type ToolOutput = Record<string, unknown>;
-export type Executor = (input: Record<string, unknown>, ctx: { tenantId: string; env: Env; digest: string; bundle: Bundle }) => Promise<ToolOutput>;
+export type Executor = ((input: Record<string, unknown>, ctx: { tenantId: string; env: Env; digest: string; bundle: Bundle; turnId: string | null; simulated: boolean }) => Promise<ToolOutput>)
+  & { simulates?: true };                                     // handles simulation itself (customer.notify records, doesn't send)
 
 /** A tool schema as the dialogue model sees it: Archable's annotations and read-only fields removed. */
 export function modelSchema(s: unknown): unknown {
@@ -48,7 +49,7 @@ export interface GatewayCtx {
   session: CallSession;
 }
 
-export type CallResult = ToolOutput | { denied: true; policies: string[] } | { error: 'tool_unavailable' };
+export type CallResult = ToolOutput | { denied: true; policies: string[] } | { error: 'tool_unavailable' } | { duplicate: true };
 
 interface Evidence { tool: string; input: Record<string, unknown>; output: ToolOutput }
 
@@ -72,15 +73,23 @@ export function toolGateway(ctx: GatewayCtx, d: GatewayDeps) {
   const authorize = (action: string, context: Record<string, unknown>): Verdict =>
     cedarDecide(bundle.policies, principal, action, project(contextType(bundle.policies, action), context) as Record<string, unknown>);
 
-  const logCall = (tx: Tx, toolId: string, input: Record<string, unknown>, verdict: Verdict, status: 'ok' | 'error' | 'denied' | 'simulated', ms: number) =>
-    tx`insert into public.tool_calls (tenant_id, turn_id, env, caller, tool, args_digest, decision, policies, status, latency_ms)
+  // An error row carries no idempotency key, so a transient failure can be retried with the same key.
+  const logCall = (tx: Tx, toolId: string, input: Record<string, unknown>, verdict: Verdict, status: 'ok' | 'error' | 'denied' | 'simulated', ms: number, key: string | null = null) =>
+    tx`insert into public.tool_calls (tenant_id, turn_id, env, caller, tool, args_digest, decision, policies, status, latency_ms, idempotency_key)
        values (${tenantId}, ${turnId}, ${pin.env}, ${caller}, ${toolId}, ${digestOf(input)}, ${verdict.allow ? 'allow' : 'deny'},
-               ${verdict.reasons}, ${status}, ${Math.round(ms)})`;
+               ${verdict.reasons}, ${status}, ${Math.round(ms)}, ${status === 'error' ? null : key})`;
 
-  async function call(id: string, rawInput: Record<string, unknown>): Promise<CallResult> {
+  /** o.idempotencyKey: a key already logged for this tool returns { duplicate: true } and runs nothing (trigger retries). */
+  async function call(id: string, rawInput: Record<string, unknown>, o: { idempotencyKey?: string } = {}): Promise<CallResult> {
     const t0 = now();
     const c = bundle.tools[id];
     if (!c) return { denied: true, policies: ['unknown_tool'] };
+    const key = o.idempotencyKey ?? null;
+    if (key) {
+      const seen = await d.inTenant(tenantId, (tx) => tx`select 1 from public.tool_calls
+        where tenant_id = ${tenantId} and env = ${pin.env} and tool = ${id} and idempotency_key = ${key}`);
+      if (seen.length) return { duplicate: true };
+    }
 
     let verdict: Verdict;
     let policyFacts: PolicyFacts = { input: rawInput, context: { approvals: [] } };
@@ -93,7 +102,7 @@ export function toolGateway(ctx: GatewayCtx, d: GatewayDeps) {
     }
     const input = policyFacts.input;
     if (!verdict.allow) {
-      await d.inTenant(tenantId, (tx) => logCall(tx, id, input, verdict, 'denied', now() - t0));
+      await d.inTenant(tenantId, (tx) => logCall(tx, id, input, verdict, 'denied', now() - t0, key));
       return { denied: true, policies: verdict.reasons };              // the model can explain or hand off
     }
 
@@ -101,9 +110,10 @@ export function toolGateway(ctx: GatewayCtx, d: GatewayDeps) {
     try {
       const run = d.executors[id];
       if (!simulated && !run) throw new Error(`no executor for ${id}`);
-      const out = simulated ? simulate(c, input) : await withDeadline(run!(input, { tenantId, env: pin.env, digest: pin.digest, bundle }), bundle.deadlines.tool);
+      const ctx = { tenantId, env: pin.env, digest: pin.digest, bundle, turnId, simulated };
+      const out = simulated && !run?.simulates ? simulate(c, input) : await withDeadline(run!(input, ctx), bundle.deadlines.tool);
       await d.inTenant(tenantId, async (tx) => {                       // [c] one transaction
-        await logCall(tx, id, input, verdict, simulated ? 'simulated' : 'ok', now() - t0);
+        await logCall(tx, id, input, verdict, simulated ? 'simulated' : 'ok', now() - t0, key);
         if (chapterId && id === 'order.quote' && typeof out.total === 'number') {
           await tx`update public.chapters set last_quote_total = ${out.total}, last_quote_at = now()
                     where tenant_id = ${tenantId} and id = ${chapterId}`;
@@ -130,7 +140,7 @@ export function toolGateway(ctx: GatewayCtx, d: GatewayDeps) {
   // Every call is mapped back to the tool id, so Cedar, tool_calls and the A2A graph keep 'catalog.search'.
   const tools: Record<string, Tool> = Object.fromEntries(agentTools.filter((id) => bundle.tools[id]).map((id) => {
     const c = bundle.tools[id]!;
-    return [c.operation_id, tool({ description: c.description, inputSchema: jsonSchema<Record<string, unknown>>(modelSchema(c.input) as JSONSchema7), execute: (input) => call(id, input) })];
+    return [c.operation_id, tool({ description: c.description, inputSchema: jsonSchema<Record<string, unknown>>(modelSchema(c.input) as JSONSchema7), execute: (input: Record<string, unknown>) => call(id, input) })];
   }));
 
   return { tools, call, authorize, caller, evidence: () => [...evidence] };

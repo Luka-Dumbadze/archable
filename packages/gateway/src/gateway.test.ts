@@ -58,7 +58,8 @@ function gateway(over: Partial<GatewayCtx> = {}, executors: Record<string, Execu
     principal: { type: 'Agent', id: 'cellar_master' }, chapterId: CHAPTER, session: { channel: 'web', linkedCustomerId: null }, ...over,
   };
   const ran: string[] = [];
-  const wrapped = Object.fromEntries(Object.entries(executors).map(([k, f]) => [k, (async (i, c) => { ran.push(k); return f(i, c); }) as Executor]));
+  const wrapped = Object.fromEntries(Object.entries(executors).map(([k, f]) => [k, Object.assign((async (i, c) => { ran.push(k); return f(i, c); }) as Executor,
+    f.simulates ? { simulates: true as const } : {})]));
   const gw = toolGateway(ctx, {
     inTenant: db.inTenant, facts: createFacts(db.inTenant), executors: wrapped, connectionsMode: mode,
     quotes: { price: async () => ({ surcharge: 0, total: 7000 }) },
@@ -189,6 +190,24 @@ describe('simulation and caller attribution', () => {
     const { gw } = gateway();
     expect(gw.caller).toBe('agent:cellar_master');
     expect(Object.keys(gw.tools).sort()).toEqual(['catalog_search', 'customer_upsert', 'delivery_status', 'handoff_staff', 'order_create', 'order_quote']);
+  });
+});
+
+describe('idempotency keys (trigger retries)', () => {
+  it('a new key runs the tool once and logs one row (duplicates: runtime/src/triggers.test.ts)', async () => {
+    const { gw, ran, db } = gateway({ principal: { type: 'Trigger', id: 'notify_on_job_status' } }, { 'customer.notify': async () => ({ sent: true }) });
+    expect(await gw.call('customer.notify', { job: ORDER }, { idempotencyKey: 'k1' })).toEqual({ sent: true });
+    const inserts = db.writes().flat().filter((q) => q.startsWith('insert into public.tool_calls'));
+    expect(inserts).toHaveLength(1);
+    expect(ran).toEqual(['customer.notify']);
+  });
+
+  it('a self-simulating executor runs in simulate mode with simulated: true', async () => {
+    let seen: unknown;
+    const notify = Object.assign(async (_i: Record<string, unknown>, c: { simulated: boolean }) => { seen = c.simulated; return { sent: false, simulated: true }; }, { simulates: true as const });
+    const { gw } = gateway({ principal: { type: 'Trigger', id: 'notify_on_job_status' } }, { 'customer.notify': notify as never }, 'simulate');
+    expect(await gw.call('customer.notify', { job: ORDER })).toEqual({ sent: false, simulated: true });
+    expect(seen).toBe(true);
   });
 });
 

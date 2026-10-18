@@ -6,6 +6,25 @@ import type { InTenant, Tx } from './db';
 import type { Executor, ToolOutput } from './gateway';
 
 type Line = { wine: string; qty: number; unit_price?: number };
+
+/** DEV-1's sender (Deliver in @archable/runtime): Telegram bot, Business, web; returns the recorded messages.id. */
+export type NotifyDeliver = (target: { kind: 'telegram'; channelId: string; botId: number; tokenSecret: string; chatId: number },
+                             text: string, o: { suggestion: string | null }) => Promise<number>;
+
+// customer.notify copy. The spec has none yet, so it is fixed per language like the holding reply; Georgian in Mkhedruli.
+const NOTIFY: Record<string, Record<string, (number: string, eta: string | null) => string>> = {
+  ka: {
+    picked_up: (n, eta) => `კურიერმა თქვენი შეკვეთა ${n} აიღო${eta ? `, მოსალოდნელი მიტანა: ${eta}` : ''}.`,
+    delivered: (n) => `თქვენი შეკვეთა ${n} მიტანილია. გმადლობთ!`,
+    failed: (n) => `შეკვეთის ${n} მიტანა ვერ მოხერხდა. ჩვენი გუნდი მალე დაგიკავშირდებათ.`,
+  },
+  en: {
+    picked_up: (n, eta) => `The courier has picked up your order ${n}${eta ? `; expected delivery: ${eta}` : ''}.`,
+    delivered: (n) => `Your order ${n} has been delivered. Thank you!`,
+    failed: (n) => `We couldn't deliver your order ${n}. Our team will contact you shortly.`,
+  },
+};
+const BUSINESS_WINDOW_HOURS = 24;                             // Telegram Business: reply only within 24 h of the customer
 type Row = { id: string; natural_key: string | null; attrs: Record<string, unknown> };
 
 // The express surcharge is the `…express.surcharge` param order.quote declares in its reads (v3 §6), in tetri.
@@ -15,7 +34,7 @@ const expressSurcharge = (b: Bundle): number => {
   return path && enabled !== false ? Number(b.params[path] ?? 0) : 0;
 };
 
-export function createExecutors(inTenant: InTenant): Record<string, Executor> {
+export function createExecutors(inTenant: InTenant, o: { deliver?: NotifyDeliver } = {}): Record<string, Executor> {
   const surchargeOf = expressSurcharge;
 
   async function price(tx: Tx, tenantId: string, env: string, lines: Line[], delivery: string, discountPct: number, bundle: Bundle) {
@@ -95,6 +114,55 @@ export function createExecutors(inTenant: InTenant): Record<string, Executor> {
 
     // Staff are told through @ArchableBot in Phase 3; until then the tool_calls row is the handoff record.
     'handoff.staff': async () => ({ queued: true }),
+
+    // plan §1.5: the customer's latest conversation, under its channel's rules. Simulated (previews,
+    // CONNECTIONS_MODE=simulate) records the message in the conversation but sends nothing outside.
+    'customer.notify': Object.assign((input: Record<string, unknown>, c: Parameters<Executor>[1]) => inTenant(c.tenantId, async (tx) => {
+      const [job] = await tx<Row[]>`select id, natural_key, attrs from public.records
+        where tenant_id = ${c.tenantId} and env = ${c.env} and entity_type = 'delivery_job' and id = ${String(input.job)}`;
+      if (!job) return { sent: false, reason: 'unknown_job' };
+      const [order] = await tx<Row[]>`select id, natural_key, attrs from public.records
+        where tenant_id = ${c.tenantId} and env = ${c.env} and entity_type = 'order' and id::text = ${String(job.attrs.order)}`;
+      const customerId = order?.attrs.customer;
+      if (!order || typeof customerId !== 'string') return { sent: false, reason: 'no_customer' };
+      const [conv] = await tx<{ id: string; channel: string; external_id: string; active_chapter: string | null; last_in: Date | null }[]>`
+        select c.id, c.channel, c.external_id, c.active_chapter,
+               (select max(m.created_at) from public.messages m where m.tenant_id = c.tenant_id and m.conversation_id = c.id and m.direction = 'in') as last_in
+          from public.conversations c
+         where c.tenant_id = ${c.tenantId} and c.env = ${c.env} and c.customer_id = ${customerId}
+         order by c.last_message_at desc nulls last limit 1`;
+      if (!conv) return { sent: false, reason: 'no_conversation' };
+
+      const status = String(job.attrs.status);
+      const locale = String((c.bundle.metadata.locale as { primary?: string } | null)?.primary ?? 'en');
+      const copy = (NOTIFY[locale] ?? NOTIFY.en!)[status] ?? NOTIFY.en![status];
+      if (!copy) return { sent: false, reason: 'no_copy_for_status' };
+      const text = copy(String(order.attrs.number ?? order.natural_key), typeof job.attrs.eta === 'string' ? job.attrs.eta : null);
+
+      if (conv.channel === 'telegram_business'
+          && !(conv.last_in && Date.now() - conv.last_in.getTime() < BUSINESS_WINDOW_HOURS * 3_600_000)) {
+        return { sent: false, channel: conv.channel, reason: 'business_window_closed' };   // a staff task instead (plan §1.5)
+      }
+      const record = async () => {
+        const [m] = await tx<{ id: string }[]>`
+          insert into public.messages (tenant_id, conversation_id, chapter_id, turn_id, direction, author, body, spec_digest)
+          values (${c.tenantId}, ${conv.id}, ${conv.active_chapter}, ${c.turnId ?? crypto.randomUUID()}, 'out', 'agent:customer.notify', ${text}, ${c.digest})
+          returning id`;
+        return Number(m!.id);
+      };
+      if (conv.channel === 'telegram' && !c.simulated) {
+        const [bot] = await tx<{ id: string; bot_id: string; token_secret: string }[]>`select id, bot_id, token_secret from public.channel_connections
+          where tenant_id = ${c.tenantId} and kind = 'telegram_bot' and status = 'live' limit 1`;
+        if (!bot) return { sent: false, channel: conv.channel, reason: 'no_live_bot' };
+        if (o.deliver) {
+          const id = await o.deliver({ kind: 'telegram', channelId: bot.id, botId: Number(bot.bot_id), tokenSecret: bot.token_secret, chatId: Number(conv.external_id) }, text, { suggestion: null });
+          return { sent: true, channel: conv.channel, message_id: id };
+        }
+        return { sent: false, channel: conv.channel, reason: 'no_sender', message_id: await record() };   // until DEV-1's send.ts is wired
+      }
+      // web: the message waits in the conversation for the next poll; simulated: recorded, nothing sent outside.
+      return { sent: conv.channel === 'web' && !c.simulated, simulated: c.simulated, channel: conv.channel, message_id: await record() };
+    }), { simulates: true as const }),
   } satisfies Record<string, (i: Record<string, unknown>, c: Parameters<Executor>[1]) => Promise<ToolOutput>>;
 }
 
@@ -102,6 +170,6 @@ export function createExecutors(inTenant: InTenant): Record<string, Executor> {
 export function createQuotes(executors: Record<string, Executor>) {
   return {
     price: (tenantId: string, pin: { env: import('@archable/contracts').Env; digest: string }, input: Record<string, unknown>, bundle: Bundle) =>
-      executors['order.quote']!({ lines: input.lines, delivery: input.delivery, discount_pct: input.discount_pct }, { tenantId, env: pin.env, digest: pin.digest, bundle }),
+      executors['order.quote']!({ lines: input.lines, delivery: input.delivery, discount_pct: input.discount_pct }, { tenantId, env: pin.env, digest: pin.digest, bundle, turnId: null, simulated: false }),
   };
 }

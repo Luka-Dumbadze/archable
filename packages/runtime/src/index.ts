@@ -10,3 +10,4 @@ export { displayMoney, draftOf, textDigest, type Evidence } from './drafts';
 export { createStore, type Conversation, type Store } from './store';
 export { createHandleTurn, type TurnDeps } from './turn';
 export { llmDecisionModel } from './llm-decision';
+export { createTriggerDrain, type DrainResult, type TriggerJob, type TriggerQueue } from './triggers';

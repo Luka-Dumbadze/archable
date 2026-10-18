@@ -94,6 +94,15 @@ when { context.input.payment == "cod" && context.quote.total > 30000 };`);
     expect(n('tool:message.send').boundedBy).toEqual(['policy:send.requires_grounding']);
   });
 
+  it('emits each trigger parsed, for the records trigger in Postgres (P3.D2.3)', () => {
+    expect(compile(marani(), lock()).bundle.triggers).toEqual({
+      dispatch_on_confirm: { on: 'order.status -> confirmed', call: 'delivery.dispatch', object: 'order', field: 'status', values: ['confirmed'] },
+      notify_on_job_status: { on: 'delivery_job.status -> picked_up|delivered|failed', call: 'customer.notify', object: 'delivery_job', field: 'status',
+                              values: ['delivered', 'failed', 'picked_up'] },
+      payout_on_delivery: { on: 'delivery_job.status -> delivered', call: 'payout.compute', object: 'delivery_job', field: 'status', values: ['delivered'] },
+    });
+  });
+
   it('parses every fixture Cedar file (P1.D2.7)', () => {
     for (const [path, text] of Object.entries(marani().files)) {
       if (path.endsWith('.cedar')) expect(checkParsePolicySet({ staticPolicies: text }), path).toEqual({ type: 'success' });

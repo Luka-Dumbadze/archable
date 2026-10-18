@@ -6,10 +6,10 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { gateway } from '@ai-sdk/gateway';
 import { createOpenAI } from '@ai-sdk/openai';
-import { createExecutors, createFacts, createQuotes } from '@archable/gateway';
+import { createExecutors, createFacts, createQuotes, type NotifyDeliver } from '@archable/gateway';
 import {
   createBundles, createContext, createDecisionLog, createDecisions, createEpochs, createHandleTurn, createStore,
-  llmDecisionModel, typesafeDecisionModel, type Deliver, type HandleTurn, type InTenant,
+  createTriggerDrain, llmDecisionModel, typesafeDecisionModel, type Deliver, type HandleTurn, type InTenant, type TriggerJob,
 } from '@archable/runtime';
 import type { LanguageModel } from 'ai';
 import { runtimeDb, withTenant } from './db';
@@ -42,5 +42,19 @@ export function createTurnEngine(o: { deliver?: Deliver } = {}): HandleTurn {
     gateway: { inTenant, facts: createFacts(inTenant), quotes: createQuotes(executors), executors },
     languageModel,
     deliver: o.deliver ?? (async () => { throw new Error('Telegram delivery is wired in Phase 3 (DEV-1, send.ts)'); }),
+  });
+}
+
+/** The trigger drain (P3.D2.3) on runtimeDb; the cron route that calls it on a schedule is P4.D2.8. */
+export function createTriggerDrainer(o: { deliver?: NotifyDeliver } = {}) {
+  const inTenant: InTenant = (tenantId, fn) => withTenant(runtimeDb, tenantId, fn);
+  const executors = createExecutors(inTenant, o);
+  return createTriggerDrain({
+    queue: {
+      read: (qty) => runtimeDb<{ msg_id: number; read_ct: number; message: TriggerJob }[]>`select msg_id, read_ct, message from private.triggers_read(${qty})`,
+      archive: async (id) => { await runtimeDb`select private.triggers_archive(${id})`; },
+    },
+    bundles: createBundles(inTenant),
+    gateway: { inTenant, facts: createFacts(inTenant), quotes: createQuotes(executors), executors },
   });
 }

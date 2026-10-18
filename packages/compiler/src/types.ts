@@ -18,7 +18,8 @@ export interface Bundle {
                           effect: Effect; reads: string[]; writes: string[]; connection?: string; needsQuote: boolean;
                           idempotency?: string[]; operation_id: string }>;
   agents: Record<string, { app: string; persona: string; tools: string[]; decisions: unknown; context: unknown; display_name: Record<string, string> }>;
-  triggers: Record<string, { on: string; call: string }>;
+  // object/field/values: `on` parsed, so the records trigger in Postgres can match without parsing (P3.D2.3).
+  triggers: Record<string, { on: string; call: string; object: string; field: string; values: string[] }>;
   decisions: Record<string, unknown>;                                   // v3 §6 decisions, thresholds included
   policies: { byId: Record<string, string>; schema: unknown; bounds: PolicyBound[]; facts: Record<string, ActionFacts> };
   channels: Record<string, { kind: 'telegram_bot' | 'telegram_business' | 'web'; public?: WidgetConfig }>;   // WidgetConfig incl. embed_origins (Q3)
