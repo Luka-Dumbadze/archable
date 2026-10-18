@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { githubApp } from "@archable/governance";
 import { Hono } from "hono";
 import { memberFromJwt } from "./auth";
+import { controlDb } from "./db";
+import { registerGithubHandlers } from "./github-handlers";
 import { githubWebhookRoutes } from "./routes/github";
 import { turnRoutes } from "./routes/turn";
 import { createTurnEngine } from "./turn-wiring";
@@ -25,5 +27,6 @@ if (process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY && githubWeb
   for (const name of ['pull_request', 'pull_request_review', 'push'] as const) {
     github.webhooks.on(name, ({ id }) => log(`github.${name}`, { delivery: id }));
   }
+  registerGithubHandlers(github, { control: controlDb, log });   // supersede on push, developer reviews → settle (P4.D2.7)
   app.route("/", githubWebhookRoutes({ app: github, log }));
 }
