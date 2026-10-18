@@ -10,6 +10,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@archable/contracts": "workspace:*",
     "canonicalize": "5.1.0",
     "octokit": "5.0.5"
   }
