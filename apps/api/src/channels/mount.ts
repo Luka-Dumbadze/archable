@@ -22,6 +22,7 @@ export function mountChannels(app: Hono, env: Record<string, string | undefined>
   app.use('/v1/manifest', tenantCors(isCustomDomain));
   app.use('/v1/turns', tenantCors(isCustomDomain));
   app.use('/v1/dev/*', tenantCors(isCustomDomain));
+  app.use('/v1/bundles/*', tenantCors(isCustomDomain));   // not in plan §6.4: the shell reads the UI projection cross-origin (Q8)
   app.route('/', chatRoutes(chatDeps));
   app.route('/', widgetRoutes(widgetDeps));
   app.route('/', telegramWebhookRoutes(webhookDeps));

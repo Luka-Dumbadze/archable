@@ -27,13 +27,19 @@ describe("app.ts: customer channels mounted (plan §6.7 step 3)", () => {
   });
 
   it("CORS covers the other shell endpoints and the custom-domain path doesn't throw", async () => {
-    for (const p of ["/v1/manifest", "/v1/turns", "/v1/dev/graph"]) {
+    for (const p of ["/v1/manifest", "/v1/turns", "/v1/dev/graph", "/v1/bundles/sha256:abc/ui"]) {
       expect((await preflight("https://marani.archable.run", p)).headers.get("access-control-allow-origin")).toBe("https://marani.archable.run");
     }
     expect((await preflight("https://os.marani.ge")).headers.get("access-control-allow-origin")).toBeNull();
     customDomains.add("os.marani.ge");
     expect((await preflight("https://os.marani.ge")).headers.get("access-control-allow-origin")).toBe("https://os.marani.ge");
     customDomains.delete("os.marani.ge");
+  });
+
+  it("CORS: the shell's plain GET of the UI projection carries the header too (Q8)", async () => {
+    const get = (origin: string) => app.request("/v1/bundles/sha256:abc/ui", { headers: { Origin: origin } });
+    expect((await get("https://marani.archable.run")).headers.get("access-control-allow-origin")).toBe("https://marani.archable.run");
+    expect((await get("https://evil.example")).headers.get("access-control-allow-origin")).toBeNull();
   });
 });
 
