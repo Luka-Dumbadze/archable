@@ -46,8 +46,8 @@ const out = await withTenant(controlDb, tenantId, async (tx) => {
   await tx`insert into public.channel_connections (tenant_id, channel_key, kind)
            select ${tenantId}, 'web_chat', 'web'
             where not exists (select 1 from public.channel_connections where tenant_id = ${tenantId} and kind = 'web' and status <> 'revoked')`;
-  const [{ active_digest, epoch }] = await tx`select active_digest, epoch from public.tenants where id = ${tenantId}`;
-  if (active_digest !== digest) await tx`select public.flip_epoch(${tenantId}, ${epoch}, ${digest})`;
+  const [cur] = await tx<{ active_digest: string | null; epoch: string }[]>`select active_digest, epoch from public.tenants where id = ${tenantId}`;
+  if (cur!.active_digest !== digest) await tx`select public.flip_epoch(${tenantId}, ${cur!.epoch}, ${digest})`;
   let items = 0;
   if (seed && catalog) {
     for (const row of JSON.parse(seed[1]) as Record<string, unknown>[]) {

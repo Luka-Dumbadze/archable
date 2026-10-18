@@ -15,6 +15,8 @@ type Tx = postgres.TransactionSql;
 export interface AuthorDeps extends DraftDeps {
   app: App;
   send?: CardDeps['send'];                           // the owner's card (DEV-1's Telegram sender); absent: no card yet
+  /** Every step of a draft job, with its tenant and desire: the owner can watch the draft (a live-edited message). */
+  progress?(tenantId: string, desire: number, event: string, data: Record<string, unknown>): void;
 }
 
 export interface DraftJob { kind: 'draft'; tenant_id: string; desire_id: string }
@@ -44,7 +46,10 @@ export async function runDraftJob(d: AuthorDeps, job: DraftJob): Promise<DraftJo
   const [owner, name] = (t?.repo_full_name ?? '').split('/');
   if (!t?.installation_id || !owner || !name) return { outcome: 'no_repo', reason: 'the tenant has no GitHub repository yet' };
   const repo: TenantRepo = { installationId: Number(t.installation_id), owner, repo: name };
+  const log = (event: string, data: Record<string, unknown>) => { d.log?.(event, data); d.progress?.(tenantId, desire.number, event, data); };
+  log('architect.started', { desire: desire.number });
   const toDeveloper = async (reason: string, note: object) => {
+    log('architect.to_developer', { desire: desire.number, reason });
     await inT((tx) => tx`update public.desires set status = 'open', assignee = 'developer', updated_at = now(),
       evidence = evidence || ${tx.json([{ kind: 'architect', at: new Date().toISOString(), ...note }] as never)}
       where tenant_id = ${tenantId} and id = ${desire.id}`);
@@ -63,7 +68,7 @@ export async function runDraftJob(d: AuthorDeps, job: DraftJob): Promise<DraftJo
   }
   const evidence = desire.evidence.filter((e) => e.text).map((e) => `${e.kind ?? 'evidence'}, ${e.at ?? ''}: ${e.text}`);
   const brief = { number: desire.number, statement: desire.statement, evidence };
-  const r = await draftChange(d, { tenantId, desire: brief, base: { files, lock, compiled, gitSha: ref.object.sha }, env: draftEnv(desire.number) });
+  const r = await draftChange({ ...d, log }, { tenantId, desire: brief, base: { files, lock, compiled, gitSha: ref.object.sha }, env: draftEnv(desire.number) });
   if (r.outcome === 'no_gap') return toDeveloper('the case passes on main: no spec gap', { case: r.failing.yaml });
   if (r.outcome === 'to_developer') return toDeveloper(`${r.attempts} attempts failed`, { case: r.failing.yaml, feedback: r.feedback });
 
@@ -128,6 +133,6 @@ export async function runDraftJob(d: AuthorDeps, job: DraftJob): Promise<DraftJo
       cardOutcome = out.map((o) => o.outcome).join(', ');
     }
   }
-  d.log?.('architect.opened', { desire: desire.number, pr: pr.prNumber, tier: radius.tier, card: cardOutcome, rationale: renderRationale(card).split('\n').length });
+  log('architect.opened', { desire: desire.number, pr: pr.prNumber, tier: radius.tier, card: cardOutcome, rationale: renderRationale(card).split('\n').length });
   return { outcome: 'opened', prNumber: pr.prNumber, tier: radius.tier, changeRequestId: crId, card: cardOutcome };
 }

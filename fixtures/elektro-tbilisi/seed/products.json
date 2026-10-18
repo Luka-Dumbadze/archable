@@ -1,0 +1,74 @@
+[
+  {
+    "sku": "SAMS-001",
+    "label": "Samsung Galaxy A35 5G 128GB",
+    "category": "phones",
+    "brand": "Samsung",
+    "warranty_months": 12,
+    "price": 89900,
+    "stock": 8
+  },
+  {
+    "sku": "APPL-002",
+    "label": "Apple iPhone 15 128GB",
+    "category": "phones",
+    "brand": "Apple",
+    "warranty_months": 12,
+    "price": 249900,
+    "stock": 4
+  },
+  {
+    "sku": "LENO-003",
+    "label": "Lenovo IdeaPad Slim 3 15.6-inch",
+    "category": "laptops",
+    "brand": "Lenovo",
+    "warranty_months": 12,
+    "price": 159900,
+    "stock": 5
+  },
+  {
+    "sku": "ASUS-004",
+    "label": "ASUS Vivobook 15 15.6-inch",
+    "category": "laptops",
+    "brand": "ASUS",
+    "warranty_months": 12,
+    "price": 189900,
+    "stock": 3
+  },
+  {
+    "sku": "JBL-005",
+    "label": "JBL Tune 520BT Wireless Headphones",
+    "category": "headphones",
+    "brand": "JBL",
+    "warranty_months": 12,
+    "price": 14900,
+    "stock": 12
+  },
+  {
+    "sku": "SONY-006",
+    "label": "Sony WH-CH720N Wireless Noise-Cancelling Headphones",
+    "category": "headphones",
+    "brand": "Sony",
+    "warranty_months": 12,
+    "price": 39900,
+    "stock": 6
+  },
+  {
+    "sku": "SAMS-007",
+    "label": "Samsung 50-inch Crystal UHD 4K Smart TV",
+    "category": "tvs",
+    "brand": "Samsung",
+    "warranty_months": 24,
+    "price": 159900,
+    "stock": 3
+  },
+  {
+    "sku": "LG-008",
+    "label": "LG 43-inch UHD 4K Smart TV",
+    "category": "tvs",
+    "brand": "LG",
+    "warranty_months": 24,
+    "price": 119900,
+    "stock": 4
+  }
+]
