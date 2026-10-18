@@ -4,6 +4,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createBundles } from '@archable/runtime';
 import { createChannelStore } from './channel-store';
 import { withTenant } from './db';
 
@@ -14,7 +15,8 @@ const rand = (n: number) => Math.floor(Math.random() * 10 ** n);
 describe.skipIf(!live)('channel store against archable (D2–D4)', () => {
   const runtime = postgres(process.env.DATABASE_URL_RUNTIME!, { prepare: false, max: 2 });
   const control = postgres(process.env.DATABASE_URL_CONTROL!, { prepare: false, max: 2 });
-  const store = createChannelStore({ runtime, control });
+  const bundles = createBundles((tenantId, fn) => withTenant(runtime, tenantId, fn));
+  const store = createChannelStore({ runtime, control, bundles });
   const tenant = randomUUID();
   const slug = `zz-p3-${randomBytes(3).toString('hex')}`;
   const owner = { id: randomUUID(), tg: 7_000_000_000 + rand(8) };
@@ -100,6 +102,40 @@ describe.skipIf(!live)('channel store against archable (D2–D4)', () => {
       expect(await store.resolveBusinessConnection(bot.via + 1, bc)).toBeNull();
       expect((await store.bindBusinessConnection(args({ enabled: false }))).outcome).toBe('disconnected');
       expect(await store.resolveBusinessConnection(bot.via, bc)).toBeNull();
+    });
+  });
+
+  describe('P3.D2.2 widget config and Business recovery', () => {
+    it('GET /v1/widget/config/marani: Georgian and English labels, the brand colour, embed origins', async () => {
+      expect(await store.widgetConfig('marani')).toEqual({
+        greeting: { ka: 'გამარჯობა! რა ღვინოს ეძებთ?', en: 'Hi! Looking for a wine?' },
+        launcher: { label: { ka: 'მოგვწერეთ', en: 'Chat with us' }, position: 'right' },
+        brand: '#7B1E3A',
+        embed_origins: ['https://marani.ge'],
+      });
+    });
+
+    it('unknown tenant, or a tenant without live web chat: null', async () => {
+      expect(await store.widgetConfig('zz-nobody')).toBeNull();
+      expect(await store.widgetConfig(slug)).toBeNull();       // the test tenant has no bundle and no web channel yet
+    });
+
+    const fetched = (id: string, user: number) => async (asked: string) => {
+      expect(asked).toBe(id);
+      return { id, user: { id: user }, user_chat_id: user, is_enabled: true, rights: { can_reply: true } };
+    };
+
+    it('a message for an unknown connection without an intent binds nothing and says why', async () => {
+      const id = `bc-r-${randomBytes(4).toString('hex')}`;
+      expect(await store.recoverBusinessConnection(fetched(id, owner.tg), bot.via, id)).toEqual({ outcome: 'no_intent', connection: null });
+    });
+
+    it('with the owner’s open intent, the fetched connection is bound and resolves; a second call finds it known', async () => {
+      const id = `bc-r-${randomBytes(4).toString('hex')}`;
+      await store.createLinkIntent(tenant, owner.id, owner.tg);
+      const r = await store.recoverBusinessConnection(fetched(id, owner.tg), bot.via, id);
+      expect(r).toMatchObject({ outcome: 'bound', connection: { tenant_id: tenant, business_user_id: owner.tg, can_reply: true } });
+      expect((await store.recoverBusinessConnection(async () => { throw new Error('not called'); }, bot.via, id)).outcome).toBe('known');
     });
   });
 

@@ -2,7 +2,8 @@
 // ChatDeps, WebhookDeps and the channel functions of ArchableBotDeps, over the plan §4.2 SQL. Each wrapper runs as
 // the role the migration grants it to: webhook ingress and chat as archable_runtime, binding and owner flows as
 // archable_control. Return shapes match the interfaces in routes/chat.ts, routes/webhooks.ts and archable-bot.ts.
-import type { ChatMessage, Env } from '@archable/contracts';
+import type { Bundle } from '@archable/compiler';
+import type { ChatMessage, Env, WidgetConfig } from '@archable/contracts';
 import type postgres from 'postgres';
 import { withTenant } from './db';
 
@@ -11,15 +12,24 @@ export interface BotHook { tenant_id: string; channel_id: string; bot_id: number
 
 type BusinessOutcome = 'bound' | 'updated' | 'disconnected' | 'no_intent' | 'not_owner' | 'ignored';
 
+/** What Telegram's getBusinessConnection returns, as far as binding needs it (Bot API BusinessConnection). */
+export interface TelegramBusinessConnection {
+  id: string;
+  user: { id: number };
+  user_chat_id: number;
+  is_enabled: boolean;
+  rights?: { can_reply?: boolean };
+}
+
 // messages.author → the chat API's three authors ('agent:cellar_master' → 'agent', 'staff:<id>' → 'staff').
 const authorOf = (a: string): ChatMessage['author'] => (a === 'customer' ? 'customer' : a.startsWith('staff') ? 'staff' : 'agent');
 const message = (m: { id: string; author: string; body: string | null; created_at: Date }): ChatMessage =>
   ({ id: Number(m.id), author: authorOf(m.author), text: m.body ?? '', at: m.created_at.toISOString() });
 
-export function createChannelStore(db: { runtime: postgres.Sql; control: postgres.Sql }) {
+export function createChannelStore(db: { runtime: postgres.Sql; control: postgres.Sql; bundles?: { load(tenantId: string, digest: string): Promise<Bundle> } }) {
   const { runtime, control } = db;
 
-  return {
+  const store = {
     // ── ChatDeps ──
     async openSession(slug: string, env: Env, secretHash: Buffer, origin: string | null) {
       const [s] = await runtime<{ tenant_id: string; session_id: string; conversation_id: string }[]>`
@@ -81,6 +91,17 @@ export function createChannelStore(db: { runtime: postgres.Sql; control: postgre
       return r!.first;
     },
 
+    // ── WidgetDeps (P3.D2.2) ──
+    /** The public projection of the active bundle's web channel (channels.web_chat + ui.theme); null if chat is off. */
+    async widgetConfig(slug: string): Promise<WidgetConfig | null> {
+      if (!db.bundles) throw new Error('widgetConfig needs the bundle cache');
+      const [t] = await runtime<{ tenant_id: string; active_digest: string }[]>`
+        select tenant_id, active_digest from private.web_chat_for(${slug})`;
+      if (!t) return null;                                      // unknown tenant, not live, or web chat off
+      const bundle = await db.bundles.load(t.tenant_id, t.active_digest);
+      return Object.values(bundle.channels).find((c) => c.kind === 'web')?.public ?? null;
+    },
+
     // ── ArchableBotDeps: channels ──
     async ownerTenants(tgUserId: number) {
       return control<{ tenant_id: string; slug: string; os_name: string; membership_id: string }[]>`
@@ -98,6 +119,20 @@ export function createChannelStore(db: { runtime: postgres.Sql; control: postgre
       const [r] = await control<{ outcome: BusinessOutcome; tenant_id: string | null }[]>`
         select outcome, tenant_id from public.bind_business_connection(${a.viaBot}, ${a.connectionId}, ${a.user}, ${a.userChat}, ${a.canReply}, ${a.enabled})`;
       return r!;
+    },
+
+    /**
+     * Plan §2.3 step 4: a Business message for a connection we don't know (Telegram warns a fresh bot can see this).
+     * Fetches the connection and runs the same bind. Without an open intent nothing is bound, and the outcome says so,
+     * so the caller can tell the owner what to tap.
+     */
+    async recoverBusinessConnection(getBusinessConnection: (id: string) => Promise<TelegramBusinessConnection>, viaBot: number, connectionId: string) {
+      const known = await store.resolveBusinessConnection(viaBot, connectionId);
+      if (known) return { outcome: 'known' as const, connection: known };
+      const bc = await getBusinessConnection(connectionId);
+      const bound = await store.bindBusinessConnection({ viaBot, connectionId: bc.id, user: bc.user.id, userChat: bc.user_chat_id,
+                                                         canReply: bc.rights?.can_reply ?? false, enabled: bc.is_enabled });
+      return { outcome: bound.outcome, connection: await store.resolveBusinessConnection(viaBot, connectionId) };
     },
 
     async resolveBusinessConnection(viaBot: number, connectionId: string) {
@@ -128,6 +163,7 @@ export function createChannelStore(db: { runtime: postgres.Sql; control: postgre
       });
     },
   };
+  return store;
 }
 
 export type ChannelStore = ReturnType<typeof createChannelStore>;

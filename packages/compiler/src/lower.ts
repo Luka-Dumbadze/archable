@@ -155,7 +155,7 @@ export function lower(r: Resolved, errors: Errors): { bundle: Lowered; projectio
   const channels: Bundle['channels'] = {};
   for (const [id, c] of Object.entries(spec.channels)) {
     channels[id] = c.kind === 'web'
-      ? { kind: 'web', public: { greeting: c.greeting, launcher: c.launcher, brand: spec.ui.theme.brand }, embed_origins: sorted(c.embed_origins) }
+      ? { kind: 'web', public: { greeting: c.greeting, launcher: c.launcher, brand: spec.ui.theme.brand, embed_origins: sorted(c.embed_origins) } }
       : { kind: c.kind };
   }
 
