@@ -1,0 +1,74 @@
+[
+  {
+    "sku": "SAMS-001",
+    "label": "Galaxy A15 128GB",
+    "category": "phones",
+    "brand": "Samsung",
+    "warranty_months": 24,
+    "price": 59900,
+    "stock": 8
+  },
+  {
+    "sku": "XIAO-002",
+    "label": "Redmi Note 13 256GB",
+    "category": "phones",
+    "brand": "Xiaomi",
+    "warranty_months": 24,
+    "price": 79900,
+    "stock": 6
+  },
+  {
+    "sku": "LENO-003",
+    "label": "IdeaPad Slim 3 15.6-inch",
+    "category": "laptops",
+    "brand": "Lenovo",
+    "warranty_months": 24,
+    "price": 169900,
+    "stock": 4
+  },
+  {
+    "sku": "ASUS-004",
+    "label": "VivoBook 15 15.6-inch",
+    "category": "laptops",
+    "brand": "ASUS",
+    "warranty_months": 24,
+    "price": 189900,
+    "stock": 3
+  },
+  {
+    "sku": "JBL-005",
+    "label": "Tune 520BT",
+    "category": "headphones",
+    "brand": "JBL",
+    "warranty_months": 12,
+    "price": 14900,
+    "stock": 10
+  },
+  {
+    "sku": "SONY-006",
+    "label": "WH-CH520",
+    "category": "headphones",
+    "brand": "Sony",
+    "warranty_months": 12,
+    "price": 17900,
+    "stock": 7
+  },
+  {
+    "sku": "TCL-007",
+    "label": "43-inch 4K Smart TV",
+    "category": "tvs",
+    "brand": "TCL",
+    "warranty_months": 24,
+    "price": 109900,
+    "stock": 4
+  },
+  {
+    "sku": "SAMS-008",
+    "label": "50-inch Crystal UHD Smart TV",
+    "category": "tvs",
+    "brand": "Samsung",
+    "warranty_months": 24,
+    "price": 179900,
+    "stock": 3
+  }
+]
