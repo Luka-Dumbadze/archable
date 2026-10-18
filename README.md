@@ -88,3 +88,14 @@ Business owners manage their enterprise through an ultra-clean, minimalist **Des
 - **API Health:** `GET https://archable.vercel.app/healthz` $\to$ `{"ok":true}`
 - **Test Suite:** Over **260+ workspace tests** passing across compiler, runtime, gateway, governance, and web shell.
 - **Reference Tenant:** Live compiled bundle verified for **Marani OS** (`marani`).
+
+
+## 🔗 Repositories & Key Documentation
+
+| Resource | Link / Path | Description |
+| :--- | :--- | :--- |
+| 📂 **Backend Monorepo** | [github.com/Luka-Dumbadze/archable](https://github.com/Luka-Dumbadze/archable) | Core Platform: Hono API, Compiler, Cedar Gateway, Runtime & Migrations |
+| 💻 **Frontend Web Shell** | [github.com/Luka-Dumbadze/archable-web](https://github.com/Luka-Dumbadze/archable-web) | Desktop Web OS: Apps, Live Telemetry A2A Map, Owner Mode & Lovable UI |
+| 📄 **Master Architecture Blueprint** | [`ARCHABLE_MASTER_BLUEPRINT_v3.md`](./ARCHABLE_MASTER_BLUEPRINT_v3.md) | Authoritative platform architecture, blast-radius engine, and invariants |
+| 📋 **Implementation & Verification Plan** | [`ARCHABLE_IMPLEMENTATION_PLAN.md`](./ARCHABLE_IMPLEMENTATION_PLAN.md) | v3.1 execution roadmap, customer ingress, and automated test proofs |
+| 🌐 **Live API Deployment** | [archable.vercel.app/healthz](https://archable.vercel.app/healthz) | Live Vercel Functions runtime (`fra1`) |
