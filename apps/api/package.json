@@ -16,10 +16,12 @@
     "@archable/compiler": "workspace:*",
     "@archable/contracts": "workspace:*",
     "@archable/gateway": "workspace:*",
+    "@archable/governance": "workspace:*",
     "@archable/runtime": "workspace:*",
     "ai": "7.0.143",
     "hono": "4.13.13",
     "jose": "6.2.12",
+    "octokit": "5.0.5",
     "postgres": "3.4.9",
     "zod": "4.6.7"
   },

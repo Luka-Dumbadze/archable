@@ -217,6 +217,9 @@ importers:
       '@archable/gateway':
         specifier: workspace:*
         version: link:../../packages/gateway
+      '@archable/governance':
+        specifier: workspace:*
+        version: link:../../packages/governance
       '@archable/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -229,6 +232,9 @@ importers:
       jose:
         specifier: 6.2.12
         version: 6.2.12
+      octokit:
+        specifier: 5.0.5
+        version: 5.0.5
       postgres:
         specifier: 3.4.9
         version: 3.4.9
