@@ -1,0 +1,7 @@
+# archable.lock: every input the compiler reads besides this tree (changes are T2)
+compiler: "@archable/compiler@3.2.1"
+templates:
+  tpl.contact_center: "3.4.0+sha256.5d1f09c2"
+  tpl.dispatch: "2.1.3+sha256.a07c51e8"
+  tpl.crm: "2.0.9+sha256.e44b7a10"
+shell: "@archable/shell@3.7.0"
