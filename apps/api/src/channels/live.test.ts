@@ -12,6 +12,9 @@ function store() {
     bindBusinessConnection: f("bindBusinessConnection", { outcome: "bound" as const, tenant_id: "t" }),
     resolveBusinessConnection: f("resolveBusinessConnection", null), bindTenantBot: f("bindTenantBot", "ch"),
     revokeChannel: f("revokeChannel", undefined), pauseAgent: f("pauseAgent", undefined),
+    resolveBotHook: f("resolveBotHook", null), firstSeen: f("firstSeen", true),
+    channelToken: f("channelToken", "tok"), recordTelegramReply: f("recordTelegramReply", 1),
+    pauseChannel: f("pauseChannel", undefined), noticeText: f("noticeText", "Hi"),
   };
   return { calls, s: s as unknown as NonNullable<Parameters<typeof liveChannelDeps>[0]> };
 }
@@ -48,10 +51,18 @@ describe("live deps: wired only where ready end to end", () => {
     expect(calls).toEqual(["widgetConfig", "ownerTenants", "createLinkIntent", "bindBusinessConnection", "resolveBusinessConnection", "bindTenantBot", "revokeChannel", "pauseAgent"]);
   });
 
-  it("chat, tenant-bot webhooks, turns and governance stay fail-closed", async () => {
+  it("tenant-bot webhooks resolve hooks and dedupe updates through the channel store", async () => {
+    const { s, calls } = store();
+    const d = liveChannelDeps(s);
+    expect(d.webhookDeps).not.toBe(webhookDeps);
+    expect(await d.webhookDeps.resolveBotHook("h")).toBeNull();
+    expect(await d.webhookDeps.firstSeen(1, 2)).toBe(true);
+    expect(calls).toEqual(["resolveBotHook", "firstSeen"]);
+  });
+
+  it("chat, turns and governance stay fail-closed", async () => {
     const d = liveChannelDeps(store().s);
     expect(d.chatDeps).toBe(chatDeps);
-    expect(d.webhookDeps).toBe(webhookDeps);
     await expect(d.archableBotDeps.runTurn({} as never)).rejects.toThrow(/not wired/);
     expect(await d.archableBotDeps.consume({} as never)).toEqual({ outcome: "unknown", change_request_id: null });
     expect(await d.archableBotDeps.ownerPress(1, "x")).toBeNull();
