@@ -19,7 +19,7 @@ runtime:
     vision: { model: google/gemini-3.8-flash, reasoning: medium }
     patch: { model: openai/gpt-6-luna, reasoning: high }      # was google/gemini-3.8-flash: free-tier quota (Q5)
     decision: { model: typesafe-ai/jev, fallback: openai/gpt-6-luna }   # was google/gemini-3.8-flash (Q5)
-  deadlines_ms: { route: 600, dialogue: 8000, pre_send: 2000, tool: 2000 }   # dialogue was 4000; covers Tbilisi-Frankfurt dev latency (Q5)
+  deadlines_ms: { route: 600, dialogue: 8000, pre_send: 4000, tool: 2000 }   # dialogue was 4000, pre_send 2000: Jev under eval load (several cases at once) took longer
 
 roles:                                # what each role may do; the members themselves are rows in Postgres
   owner: { approves: [T1, T2, T3, T4], edits: all }
@@ -250,7 +250,7 @@ decisions:                            # Jev question sets; thresholds from evals
     kind: boolean
     stage: pre_send                   # fails closed (I7)
     state: [draft_reply, evidence]
-    instructions: Is every price, stock level, delivery time and policy in the reply supported by the evidence?
+    instructions: Is every price, stock level, delivery time and policy the reply states supported by the evidence? A reply that states none of these (a greeting, a question, a thank-you) is supported.
     pass_at: 0.40                       # evals/calibration 2026-10-18, Mkhedruli: true >= 0.56, false <= 0.22 (was 0.90, then 0.75)
     escalate: { probability_between: [0.30, 0.40] }
   send.commitment:
