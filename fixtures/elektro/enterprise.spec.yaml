@@ -307,7 +307,7 @@ governance:
   delegation: { to: developer, up_to: T2 }     # T3 and T4 are never delegable (platform rule)
   card_ttl: { T1: 72h, T2: 72h, T3: 24h, T4: 24h }
   preview_required_from: T3
-  architect: { max_open_prs: 3, max_patch_attempts: 2 }   # then the desire goes to the developer
+  architect: { max_open_prs: 3, max_patch_attempts: 3 }   # then the desire goes to the developer
 
 evals:
   suites:
