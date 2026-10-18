@@ -177,6 +177,8 @@ try {
 } finally {
   // Confirm what was read here, or Telegram hands the owner's last answer to the webhook as a new request.
   if (!dry) await tg('getUpdates', { offset, timeout: 0 });
-  await tg('setWebhook', { url: webhook.url, secret_token: webhook.secret });
+  // allowed_updates explicitly: polling above asked for messages only, and Telegram keeps the last list.
+  await tg('setWebhook', { url: webhook.url, secret_token: webhook.secret,
+    allowed_updates: ['message', 'callback_query', 'business_connection', 'business_message', 'edited_business_message', 'deleted_business_messages'] });
   console.log('webhook restored');
 }
