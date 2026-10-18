@@ -7,7 +7,7 @@
 import { githubApp, type CardEditor as GovernanceCardEditor } from '@archable/governance';
 import { createBundles, typesafeDecisionModel } from '@archable/runtime';
 import { Api } from 'grammy';
-import { sharedArchitect, telegramCardSender } from '../architect-wiring';
+import { sharedArchitect, telegramOwnerDeps } from '../architect-wiring';
 import { createGovernanceDeps } from '../governance-deps';
 import { createLanguageModels, createTurnEngine } from '../turn-wiring';
 import { createCardEditor } from './telegram/cards';
@@ -92,7 +92,7 @@ function governanceBotDeps(env: Record<string, string | undefined> = process.env
     live: async (c, osName, title, undoRef) => { await editor.live(c, osName, title, undoRef); },
     supersede: async (c, title) => { await editor.supersede(c, title); },
   } : undefined;
-  const architect = github ? sharedArchitect({ app: github, log, ...(env.ARCHABLE_BOT_TOKEN ? { send: telegramCardSender(env.ARCHABLE_BOT_TOKEN) } : {}) }) : null;
+  const architect = github ? sharedArchitect({ app: github, log, ...(env.ARCHABLE_BOT_TOKEN ? telegramOwnerDeps(env.ARCHABLE_BOT_TOKEN) : {}) }) : null;
   const g = createGovernanceDeps({
     control: controlDb, app: github, log, ...(cards ? { cards } : {}), ...(architect ? { kick: architect.kick } : {}),
     intake: { jev: typesafeDecisionModel({ apiKey: env.TYPESAFE_API_KEY }), lane: { model: createLanguageModels()(env.OWNER_INTAKE_MODEL ?? 'openai/gpt-6-luna') } },
