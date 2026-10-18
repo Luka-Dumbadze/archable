@@ -12,6 +12,19 @@ import { createLanguageModels, createTriggerDrainer, createTurnEngine } from './
 
 // One Architect per process: app.ts (cron, GitHub) and channels/live.ts (@ArchableBot's Draft it) share its drain.
 let shared: ReturnType<typeof createArchitect> | null = null;
+
+/** The owner's change card through @ArchableBot, laid out as DEV-1's changeCardKeyboard (plan §6.3). */
+export function telegramCardSender(botToken: string): CardDeps['send'] {
+  return async (c) => {
+    const r = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ chat_id: c.chatId, text: c.text, reply_markup: { inline_keyboard: [
+        [{ text: 'Preview', url: c.previewUrl }, { text: 'ℹ️ View rationale', callback_data: `rv:c:${c.rationaleRef}` }],
+        [{ text: 'Approve…', callback_data: `a1:${c.approveNonce}` }, { text: 'Reject', callback_data: `r1:${c.rejectNonce}` }]] } }) });
+    const j = await r.json() as { ok: boolean; description?: string; result: { message_id: number; chat: { id: number }; text: string } };
+    if (!j.ok) throw new Error(`sendMessage: ${j.description}`);
+    return { chatId: j.result.chat.id, messageId: j.result.message_id, text: j.result.text };
+  };
+}
 export function sharedArchitect(o: Parameters<typeof createArchitect>[0]) {
   shared ??= createArchitect(o);
   return shared;
