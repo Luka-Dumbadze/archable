@@ -9,34 +9,60 @@
 
 ---
 
-## ⚡ What is Archable?
+```mermaid
+flowchart LR
+    accTitle: Archable architecture
+    accDescr: The Operating Loop serves customers under Cedar policy. Denials and feedback feed the Evolution Loop, which ships approved changes back through an atomic epoch flip.
 
-Building custom business software (ERP, CRM, dispatch, support) takes months and costs tens of thousands of dollars. Generic AI chatbots hallucinate prices, give unauthorized discounts, and cannot reliably run operations.
+    subgraph RUN["Operating Loop · safe runtime"]
+        direction TB
+        C(["<b>Customers</b><br/><small>Telegram · Web widget</small>"])
+        A("<b>Agent Network</b><br/><small>Contact Center · Dispatch · CRM</small>")
+        P{{"<b>Cedar Policy Engine</b><br/><small>sole authority · fails closed</small>"}}
+        D[("<b>PostgreSQL 17</b><br/><small>multi-tenant RLS</small>")]
+        C <-->|messages| A
+        A -->|tool calls| P
+        P -->|ALLOW| D
+    end
 
-**Archable pioneers "Business-as-Code":**
-It takes raw business evidence (a flyer photo, price sheet, or Telegram message), compiles it into a formal, typed specification (`enterprise.spec.yaml`), and deploys a live, multi-agent **Web-based Operating System (Business OS)** in under a minute.
+    subgraph EVO["Evolution Loop · self-healing"]
+        direction TB
+        F("<b>Failure Signals</b><br/><small>denials · bottlenecks · feedback</small>")
+        S("<b>Structured Desires</b><br/><small>clustered, e.g. D-14</small>")
+        R("<b>Architect Engine</b><br/><small>blast radius · tiers T1–T4</small>")
+        G{{"<b>Triad Governance</b><br/><small>GitHub review + Owner nonce</small>"}}
+        E("<b>Atomic Epoch Flip</b><br/><small>sha256 content-addressed bundle</small>")
+        F --> S
+        S --> R
+        R -->|typed ChangeSet| G
+        G -->|approved| E
+    end
 
----
+    RUN -.->|DENY + feedback| EVO
+    EVO ==>|zero-downtime deploy| RUN
 
-## 🔁 The Two Interlocking Loops
+    classDef actor  fill:#F8FAFC,stroke:#64748B,stroke-width:1.5px,color:#0F172A
+    classDef agent  fill:#EFF6FF,stroke:#3B82F6,stroke-width:1.5px,color:#1E3A8A
+    classDef gate   fill:#FFFBEB,stroke:#D97706,stroke-width:1.5px,color:#78350F
+    classDef data   fill:#ECFDF5,stroke:#059669,stroke-width:1.5px,color:#064E3B
+    classDef signal fill:#FFF1F2,stroke:#E11D48,stroke-width:1.5px,color:#881337
+    classDef evo    fill:#F5F3FF,stroke:#8B5CF6,stroke-width:1.5px,color:#4C1D95
 
-Archable unites runtime operations and autonomous continuous improvement into two closed loops:
+    class C actor
+    class A agent
+    class P,G gate
+    class D data
+    class F signal
+    class S,R,E evo
 
+    style RUN fill:#3B82F60D,stroke:#3B82F6,stroke-width:1px,color:#3B82F6
+    style EVO fill:#8B5CF60D,stroke:#8B5CF6,stroke-width:1px,color:#8B5CF6
+
+    linkStyle 2 stroke:#059669,stroke-width:2px
+    linkStyle 7 stroke:#E11D48,stroke-width:2px
+    linkStyle 8 stroke:#059669,stroke-width:3px
 ```
-                  ┌──────────────────────────────────────────────┐
-                  │          1. THE OPERATING LOOP (Runtime)      │
-                  │ Customers ⇄ Multi-Agent App Kit ⇄ Cedar Authz │
-                  └──────────────────────┬───────────────────────┘
-                                         │ Customer feedback / Failures
-                                         ▼
-                  ┌──────────────────────────────────────────────┐
-                  │       2. THE EVOLUTION LOOP (The Architect)   │
-                  │ Desires ➔ Auto-reproduce ➔ Blast Radius ➔ PR │
-                  └──────────────────────┬───────────────────────┘
-                                         │ Epoch Flip (Atomic Update)
-                                         ▼
-                             [ Live Updated Business OS ]
-```
+### 1. The Operating Loop (Safe Runtime)
 
 ### 1. The Operating Loop (Safe Runtime)
 - **Omnichannel Ingress:** Customers interact strictly via **Telegram Bot**, **Telegram Business** (with automated Secretary mode), and embedded web widgets.
