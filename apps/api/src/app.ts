@@ -6,6 +6,10 @@ import { controlDb, runtimeDb } from "./db";
 import { bundleRoutes } from "./routes/bundles";
 import { manifestRoutes } from "./routes/manifest";
 import { createShellStore } from "./shell-store";
+import { devRoutes } from "./routes/devmode";
+import { createDevStore } from "./devmode-store";
+import { desireRoutes } from "./routes/desires";
+import { createDesireStore } from "./desire-store";
 import { registerGithubHandlers } from "./github-handlers";
 import { createArchitect } from "./architect-wiring";
 import { cronRoutes } from "./routes/cron";
@@ -29,6 +33,10 @@ app.route("/", turnRoutes({ memberFromJwt, handleTurn: createTurnEngine(), newTu
 const shell = createShellStore(runtimeDb);
 app.route("/", manifestRoutes(shell.manifest));
 app.route("/", bundleRoutes({ memberFromJwt, uiProjection: shell.uiProjection }));
+
+// DEV-2: Developer Mode, the A2A graph and edge inspector (plan §8.3, P5.D2.2). Owner and developer only.
+app.route("/", desireRoutes(createDesireStore(controlDb, memberFromJwt)));   // the Desires Feed (Q9 (4)), before devRoutes
+app.route("/", devRoutes(createDevStore(runtimeDb, { memberFromJwt, ...(process.env.ELVA_PLAYGROUND_URL ? { playgroundBase: process.env.ELVA_PLAYGROUND_URL } : {}) })));
 
 // DEV-2: the archable-architect App's webhook (plan §7.1). Mounted only when the App is configured; the
 // pull_request, pull_request_review and push handlers (ledger, card supersede) come with P4.D2.6 and P4.D2.7.

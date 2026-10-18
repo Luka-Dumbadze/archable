@@ -226,12 +226,18 @@ importers:
       '@archable/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
+      '@cedar-policy/cedar-wasm':
+        specifier: 4.13.0
+        version: 4.13.0
       '@vercel/functions':
         specifier: 3.10.1
         version: 3.10.1
       ai:
         specifier: 7.0.143
         version: 7.0.143(zod@4.6.7)
+      canonicalize:
+        specifier: 5.1.0
+        version: 5.1.0
       grammy:
         specifier: 1.46.0
         version: 1.46.0
@@ -247,6 +253,9 @@ importers:
       postgres:
         specifier: 3.4.9
         version: 3.4.9
+      yaml:
+        specifier: 2.9.1
+        version: 2.9.1
       zod:
         specifier: 4.6.7
         version: 4.6.7
