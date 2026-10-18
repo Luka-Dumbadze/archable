@@ -10,6 +10,7 @@ import { controlDb, runtimeDb, withTenant } from '../apps/api/src/db';
 import { createArchitect } from '../apps/api/src/architect-wiring';
 import { createGovernanceDeps } from '../apps/api/src/governance-deps';
 import { createLanguageModels } from '../apps/api/src/turn-wiring';
+import type { CardMessage, Sent } from '../packages/governance/src/index';
 
 const { values } = parseArgs({ options: { tenant: { type: 'string', default: 'marani' }, say: { type: 'string' } } });
 const slug = values.tenant!, text = values.say!;
@@ -20,7 +21,19 @@ const tenantId = `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.sl
 const log = (event: string, data: Record<string, unknown>) => console.log(JSON.stringify({ event, ...data }).slice(0, 400));
 
 const app = new App({ appId: Number(process.env.GITHUB_APP_ID), privateKey: createPrivateKey(process.env.GITHUB_APP_PRIVATE_KEY!).export({ type: 'pkcs8', format: 'pem' }).toString() });
-const architect = createArchitect({ app, log });
+// The owner's card, when the change needs only the owner (T1): sent by @ArchableBot as changeCardKeyboard lays it out
+// (plan §6.3), so the owner approves it in Telegram and the deployed bot settles it.
+const botToken = process.env.ARCHABLE_BOT_TOKEN;
+const send = botToken ? async (c: CardMessage): Promise<Sent> => {
+  const r = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ chat_id: c.chatId, text: c.text, reply_markup: { inline_keyboard: [
+      [{ text: 'Preview', url: c.previewUrl }, { text: 'ℹ️ View rationale', callback_data: `rv:c:${c.rationaleRef}` }],
+      [{ text: 'Approve…', callback_data: `a1:${c.approveNonce}` }, { text: 'Reject', callback_data: `r1:${c.rejectNonce}` }]] } }) });
+  const j = await r.json() as { ok: boolean; description?: string; result: { message_id: number; chat: { id: number }; text: string } };
+  if (!j.ok) throw new Error(`sendMessage: ${j.description}`);
+  return { chatId: j.result.chat.id, messageId: j.result.message_id, text: j.result.text };
+} : undefined;
+const architect = createArchitect({ app, log, ...(send ? { send } : {}) });
 let kicked: Promise<void> | null = null;
 const [active] = await withTenant(controlDb, tenantId, (tx) => tx<{ bundle: { models: { dialogue: { model: string; reasoning?: string } } } }[]>`
   select s.bundle from public.specs s join public.tenants t on t.id = s.tenant_id and t.active_digest = s.digest where t.id = ${tenantId}`);
