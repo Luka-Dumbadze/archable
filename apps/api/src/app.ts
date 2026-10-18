@@ -18,6 +18,10 @@ export const app = new Hono();
 
 app.get("/healthz", (c) => c.json({ ok: true }));
 
+// DEV-1: customer channels: web chat, widget, tenant-bot webhooks, @ArchableBot, tenant CORS (plan §6.4).
+import { mountChannels } from "./channels/mount";
+mountChannels(app);
+
 // DEV-2: console turns (plan §5.6)
 app.route("/", turnRoutes({ memberFromJwt, handleTurn: createTurnEngine(), newTurnId: randomUUID }));
 
@@ -43,3 +47,4 @@ if (process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY && githubWeb
   app.route("/", githubWebhookRoutes({ app: github, log }));
   if (architect) app.route("/", cronRoutes({ secret: process.env.CRON_SECRET, drain: architect.drain }));
 }
+

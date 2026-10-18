@@ -23,6 +23,7 @@
     "@vercel/functions": "3.10.1",
     "ai": "7.0.143",
     "canonicalize": "5.1.0",
+    "grammy": "1.46.0",
     "hono": "4.13.13",
     "jose": "6.2.12",
     "octokit": "5.0.5",
