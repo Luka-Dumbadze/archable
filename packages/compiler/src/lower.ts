@@ -1,6 +1,7 @@
 // lower: resolved spec → bundle sections. Money lowers to integer tetri with
 // `x-archable: {semantics: "money", currency, scale: 2}` (plan §4.3); everything unordered is sorted (I2).
-import type { JsonSchema } from '@archable/contracts';
+import type { JsonSchema, Tier } from '@archable/contracts';
+import { labelsOf } from './labels';
 import type { Field, Spec } from '@archable/schema';
 import { cedarArtifacts } from './cedar-schema';
 import { digestOf } from './digest';
@@ -110,6 +111,8 @@ function signatureSchema(spec: Spec, sig: Record<string, string>, where: string,
   return { type: 'object', additionalProperties: false, properties, required: sorted(required) };
 }
 
+const tierOf = (t: string) => Number(t.slice(1)) as Tier;
+
 const titleOf = (id: string) => id.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
 export type Lowered = Omit<Bundle, 'graph' | 'a2a'>;
@@ -181,6 +184,12 @@ export function lower(r: Resolved, errors: Errors): { bundle: Lowered; projectio
     apps: Object.fromEntries(Object.entries(spec.apps).map(([id, a]) => [id, { template: a.template, agent: a.agent ?? null, channels: [...(a.channels ?? [])] }])),
     params: Object.fromEntries(Object.entries(r.params).sort(([a], [b]) => (a < b ? -1 : 1))),
     ui: spec.ui,
+    risk: {
+      floors: Object.fromEntries(Object.entries(spec.risk.floors).sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, t]) => [k, tierOf(t)])),
+      changeRules: Object.fromEntries(Object.entries(spec.risk.change_rules).sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, t]) => [k, tierOf(t)])),
+      cutAtBoundedTools: spec.risk.influence.cut_at_bounded_tools,
+    },
+    labels: labelsOf(r),
     evals: {
       suites: spec.evals.suites,
       select: spec.evals.select,

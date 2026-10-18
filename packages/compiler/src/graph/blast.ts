@@ -1,14 +1,27 @@
 // packages/compiler/src/graph/blast.ts: the blast-radius graph (v3 §3). Edges point the way impact flows,
-// one per row of the v3 §3.3 table. Phase 1 builds the graph; blastRadius() over base and head comes in Phase 4.
-import type { Spec } from '@archable/schema';
+// one per row of the v3 §3.3 table. buildGraph runs in every compile; blastRadius() compares a base and a head graph.
+import type { Tier } from '@archable/contracts';
+import type { Field, Spec } from '@archable/schema';
 import { digestOf } from '../digest';
+import { labelsOf } from '../labels';
 import { BUILTIN_TOOLS, fieldPath, refNodes, type Resolved } from '../resolve';
 
 export type EdgeKind = 'read_by' | 'written_by' | 'writes' | 'contract_of' | 'may_invoke' | 'guards'
   | 'configures' | 'informs' | 'fires' | 'calls' | 'rendered_by' | 'transports';
 
-export interface GNode { id: string; hash: string; tags: string[]; boundedBy: string[] }
+// facets: what a change to a field is (type, required, enum values), so the diff can name its change rule.
+export interface FieldFacets { type: string; required: boolean; values: string[] }
+export interface GNode { id: string; hash: string; tags: string[]; boundedBy: string[]; facets?: FieldFacets }
 export interface GEdge { from: string; to: string; kind: EdgeKind }
+
+// Labels are copy: they never change a node's hash (they are hashed into copy:labels instead).
+const behavior = (f: Field): Field => {
+  const { label: _l, value_labels: _v, of, ...rest } = f;
+  return of ? { ...rest, of: Object.fromEntries(Object.entries(of).map(([k, x]) => [k, behavior(x)])) } : rest;
+};
+const facetsOf = (f: Field): FieldFacets => ({
+  type: f.type, required: !f.optional && f.default === undefined && !f.generated && !f.derived, values: [...(f.values ?? [])],
+});
 
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -31,7 +44,8 @@ export function buildGraph(r: Resolved): { nodes: GNode[]; edges: GEdge[] } {
     node(`object:${id}`, { key: obj.key, title: obj.title, source: obj.source ?? null, owner: r.objectOwner[id] });
     for (const [name, f] of Object.entries(obj.fields)) {
       const tags = [...(f.type === 'money' ? ['money'] : []), ...(f.pii ? ['pii'] : []), ...(obj.key === name ? ['key'] : [])];
-      node(`field:${id}.${name}`, f, tags);
+      node(`field:${id}.${name}`, behavior(f), tags);
+      nodes.get(`field:${id}.${name}`)!.facets = facetsOf(f);
     }
   }
   // Template parameters.
@@ -46,7 +60,8 @@ export function buildGraph(r: Resolved): { nodes: GNode[]; edges: GEdge[] } {
       ...(t.effect === 'notify' ? ['notify'] : []),
       ...(t.effect === 'external' && reads.some((n) => n.startsWith('field:') && pii(n)) ? ['pii_egress'] : []),
     ];
-    node(`tool:${id}`, { ...t, owner: r.toolOwner[id] }, tags);
+    const { label: _label, ...contract } = t;
+    node(`tool:${id}`, { ...contract, owner: r.toolOwner[id] }, tags);
     for (const n of reads) edge(n, `tool:${id}`, 'read_by');
     for (const n of refs(t.writes)) {
       edge(n, `tool:${id}`, 'written_by');
@@ -115,6 +130,10 @@ export function buildGraph(r: Resolved): { nodes: GNode[]; edges: GEdge[] } {
   // Eval cases (test selection only).
   for (const [suite, cases] of Object.entries(r.evalCases)) for (const c of cases) node(`eval:${suite}/${c.id}`, c.content);
 
+  // Labels and agent display names (Q7): one copy node, no edges; changing it is ui.copy.
+  const { nodes: labelled, values } = labelsOf(r);
+  node('copy:labels', { nodes: labelled, values });
+
   for (const n of nodes.values()) n.boundedBy.sort();
   return {
     nodes: [...nodes.values()].sort((a, b) => cmp(a.id, b.id)),
@@ -133,7 +152,7 @@ function personaPlaceholders(spec: Spec, text: string): string[] {
  * What a policy's `context.*` path reads: `context.input.discount_pct` → the field behind that input's type,
  * `context.customer.age_verified` → field:customer.age_verified, `context.signals.grounded` → decision:send.grounded.
  */
-function contextRefs(spec: Spec, action: string, path: string): string[] {
+export function contextRefs(spec: Spec, action: string, path: string): string[] {
   const [, head, attr] = path.split('.') as [string, string | undefined, string | undefined];
   if (head === 'input' && attr) {
     const expr = spec.tools[action]?.input[attr]?.replace(/\?$/, '');
@@ -143,4 +162,128 @@ function contextRefs(spec: Spec, action: string, path: string): string[] {
   if (head === 'signals' && attr) return Object.keys(spec.decisions).filter((d) => d.endsWith(`.${attr}`)).map((d) => `decision:${d}`);
   if (head && attr && spec.objects[head]?.fields[attr]) return [`field:${head}.${attr}`];
   return [];
+}
+
+// ── blast radius (v3 §3.5) ──
+
+type Mode = 'def' | 'run';
+export type GraphData = { nodes: GNode[]; edges: GEdge[] };
+export interface RiskRules { floors: Record<string, Tier>; changeRules: Record<string, Tier>; cutAtBoundedTools: boolean }
+export interface Reason { tier: Tier; rule: string; path: string[] }
+export interface BlastRadius {
+  tier: Tier;
+  delta: Record<string, string>;                     // changed node → change kind ('enum.add_value')
+  changed: string[];                                 // the keys of delta, sorted
+  reached: string[];                                 // `${mode}|${node}` states, in breadth-first order
+  why: Reason[];                                     // the witnesses at the deciding tier
+}
+
+// The mode an edge produces, given the mode its source was reached in (undefined: no propagation).
+const STEP: Record<EdgeKind, Partial<Record<Mode, Mode>>> = {
+  read_by: { def: 'run', run: 'run' },
+  written_by: { def: 'def' },              // a field's definition changes its writers' contracts
+  writes: { run: 'run' },                  // only a behavior change alters the values written
+  contract_of: { def: 'run', run: 'run' },
+  may_invoke: { run: 'run' },              // LLM-mediated: cut at bounded tools
+  guards: { def: 'run', run: 'run' },
+  configures: { def: 'run' },
+  informs: { def: 'run', run: 'run' },
+  fires: { def: 'run', run: 'run' },
+  calls: { def: 'run', run: 'run' },
+  rendered_by: { def: 'run', run: 'run' },
+  transports: { def: 'run', run: 'run' },
+};
+
+/** The change rule a node's change falls under (risk.change_rules); kinds the rules don't name are T2. */
+export function changeKind(id: string, b: GNode | undefined, h: GNode | undefined): string {
+  const kind = id.slice(0, id.indexOf(':'));
+  switch (kind) {
+    case 'field': {
+      if (!b) return h?.facets?.required ? 'field.add_required' : 'field.add_optional';
+      if (!h) return 'field.remove';
+      const fb = b.facets, fh = h.facets;
+      if (fb && fh) {
+        if (fb.type !== fh.type || fb.values.some((v) => !fh.values.includes(v))) return 'field.retype';
+        if (!fb.required && fh.required) return 'field.add_required';
+        if (fh.values.some((v) => !fb.values.includes(v))) return 'enum.add_value';
+      }
+      return 'field.change';
+    }
+    case 'object': return !h ? 'object.remove' : !b ? 'object.add' : 'object.change';
+    case 'persona': return 'persona.text';
+    case 'policy': return 'policy.any';
+    case 'eval': return !h ? 'eval.remove' : !b ? 'eval.add' : 'eval.change';
+    case 'decision': return 'decision.threshold';
+    case 'tool': return 'tool.contract';
+    case 'view': return 'ui.layout';
+    case 'ext': return 'extension.code';
+    case 'connection': return 'connection.any';
+    case 'gov': return 'governance.any';
+    case 'ci': return 'ci.any';
+    case 'copy': return 'ui.copy';
+    default: return `${kind}.change`;
+  }
+}
+
+export function blastRadius(base: GraphData, head: GraphData, risk: RiskRules): BlastRadius {
+  const bn = new Map(base.nodes.map((n) => [n.id, n]));
+  const hn = new Map(head.nodes.map((n) => [n.id, n]));
+  const delta = new Map<string, string>();
+  for (const id of [...new Set([...bn.keys(), ...hn.keys()])].sort()) {
+    const b = bn.get(id), h = hn.get(id);
+    if (b?.hash !== h?.hash) delta.set(id, changeKind(id, b, h));
+  }
+
+  // The union: head nodes win, removed nodes keep their old edges.
+  const nodes = new Map([...bn, ...hn]);
+  const out = new Map<string, { to: string; kind: EdgeKind }[]>();
+  const seen = new Set<string>();
+  for (const e of [...head.edges, ...base.edges]) {
+    const k = `${e.from}|${e.kind}|${e.to}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.set(e.from, [...(out.get(e.from) ?? []), { to: e.to, kind: e.kind }]);
+  }
+  const isBounded = (tool: GNode | undefined) =>
+    risk.cutAtBoundedTools && !!tool && tool.boundedBy.length > 0 && tool.boundedBy.every((p) => !delta.has(p));
+
+  const parent = new Map<string, string | null>();   // state key `${mode}|${id}` → predecessor
+  const queue: [string, Mode][] = [];
+  for (const id of delta.keys()) { parent.set(`def|${id}`, null); queue.push([id, 'def']); }
+  for (let i = 0; i < queue.length; i++) {
+    const [id, mode] = queue[i]!;
+    for (const e of out.get(id) ?? []) {
+      const next = STEP[e.kind][mode];
+      if (!next) continue;
+      if (e.kind === 'may_invoke' && isBounded(nodes.get(e.to))) continue;
+      const key = `${next}|${e.to}`;
+      if (parent.has(key)) continue;
+      parent.set(key, `${mode}|${id}`);
+      queue.push([e.to, next]);
+    }
+  }
+
+  const reasons: Reason[] = [];
+  for (const [id, change] of delta) reasons.push({ tier: risk.changeRules[change] ?? 2, rule: change, path: [id] });
+  for (const key of parent.keys()) {
+    const [mode, id] = splitKey(key);
+    if (mode === 'def' && !delta.has(id)) continue;  // interface-only impact sets no floor
+    for (const tag of nodes.get(id)?.tags ?? []) {
+      const floor = risk.floors[tag];
+      if (floor !== undefined) reasons.push({ tier: floor, rule: tag, path: witness(parent, key) });
+    }
+  }
+  const tier = Math.max(0, ...reasons.map((r) => r.tier)) as Tier;
+  return { tier, delta: Object.fromEntries(delta), changed: [...delta.keys()], reached: [...parent.keys()], why: reasons.filter((r) => r.tier === tier) };
+}
+
+function splitKey(key: string): [Mode, string] {
+  const i = key.indexOf('|');
+  return [key.slice(0, i) as Mode, key.slice(i + 1)];
+}
+
+function witness(parent: Map<string, string | null>, key: string): string[] {
+  const path: string[] = [];
+  for (let k: string | null = key; k; k = parent.get(k) ?? null) path.unshift(splitKey(k)[1]);
+  return path;
 }

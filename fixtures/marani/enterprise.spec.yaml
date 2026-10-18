@@ -17,7 +17,7 @@ runtime:
   models:                             # AI Gateway slugs; moved by the merged-PR index (T2)
     dialogue: { model: openai/gpt-6-luna, reasoning: none }   # was google/gemini-3.6-flash: Google overloads and quotas (Q5)
     vision: { model: google/gemini-3.8-flash, reasoning: medium }
-    patch: { model: google/gemini-3.8-flash, reasoning: high }
+    patch: { model: openai/gpt-6-luna, reasoning: high }      # was google/gemini-3.8-flash: free-tier quota (Q5)
     decision: { model: typesafe-ai/jev, fallback: openai/gpt-6-luna }   # was google/gemini-3.8-flash (Q5)
   deadlines_ms: { route: 600, dialogue: 8000, pre_send: 2000, tool: 2000 }   # dialogue was 4000; covers Tbilisi-Frankfurt dev latency (Q5)
 
@@ -61,10 +61,20 @@ objects:
           wine: { type: ref, to: wine, by: sku }
           qty: { type: integer, min: 1, max: 24 }
           unit_price: { type: money }
-      discount_pct: { type: integer, min: 0, max: 100, default: 0 }
+      discount_pct: { type: integer, min: 0, max: 100, default: 0, label: { en: discount, ka: ფასდაკლება } }
       surcharge: { type: money, default: 0 }
-      total: { type: money, derived: "sum(lines.map(l, l.qty * l.unit_price)) * (100 - discount_pct) / 100 + surcharge" }
-      payment: { type: enum, values: [card_link, bank_transfer], default: card_link }
+      total:
+        type: money
+        derived: "sum(lines.map(l, l.qty * l.unit_price)) * (100 - discount_pct) / 100 + surcharge"
+        label: { en: order total, ka: შეკვეთის ჯამი }   # labels are copy (Q7): what cards and summaries call a node
+      payment:
+        type: enum
+        values: [card_link, bank_transfer]
+        default: card_link
+        label: { en: payment method, ka: გადახდის მეთოდი }
+        value_labels:
+          card_link: { en: card payment link, ka: ბარათით გადახდის ბმული }
+          bank_transfer: { en: bank transfer, ka: საბანკო გადარიცხვა }
       delivery: { type: enum, values: [standard, express], default: standard }
       status: { type: enum, values: [draft, awaiting_staff, confirmed, dispatched, delivered, cancelled], default: draft }
   delivery_job:
@@ -75,7 +85,7 @@ objects:
       zone: { type: enum, values: [mtatsminda, vake, saburtalo, didube, isani] }
       courier: { type: ref, to: courier, optional: true }
       eta: { type: datetime, optional: true }
-      payout: { type: money, optional: true }
+      payout: { type: money, optional: true, label: { en: payout amount, ka: ანაზღაურების თანხა } }
       status: { type: enum, values: [queued, assigned, picked_up, delivered, failed], default: queued }
   courier:
     key: phone
@@ -152,6 +162,7 @@ tools:                                # MCP-shaped contracts. message.send is bu
     input: { reason: string, urgency: "enum<normal,urgent>" }
     effect: notify
   delivery.dispatch:
+    label: { en: courier booking, ka: კურიერის გამოძახება }
     description: Book a courier for a confirmed order.
     input: { order: order }
     reads: [order.delivery, order.payment, order.total, customer.address, customer.phone]
@@ -164,6 +175,7 @@ tools:                                # MCP-shaped contracts. message.send is bu
     writes: [delivery_job.status, delivery_job.eta]
     effect: internal
   payout.compute:
+    label: { en: courier payout, ka: კურიერის ანაზღაურება }
     description: Compute the courier payout for a delivered job.
     input: { job: delivery_job }
     reads: [courier.payout_rate, order.delivery, order.payment]
