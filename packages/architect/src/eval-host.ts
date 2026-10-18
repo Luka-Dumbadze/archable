@@ -32,9 +32,13 @@ export async function openEvalEnv(control: Sql, o: { tenantId: string; env: Env;
       for (const a of b.projections.apps) await tx`insert into public.apps ${tx({ tenant_id: o.tenantId, spec_digest: b.digest, ...a } as never)}`;
     }
     await cleanEnv(tx, o.tenantId, o.env, []);                              // a crashed earlier run leaves nothing behind
-    for (const w of JSON.parse(o.files['seed/wines.json'] ?? '[]') as Record<string, unknown>[]) {
+    // The catalog is the object catalog.search reads ('wine' for Marani, 'product' for a shop); its rows are the tree's
+    // seed/*.json, as scripts/onboard.ts seeds prod.
+    const object = (o.bundles[0]?.bundle.tools['catalog.search']?.reads[0] ?? 'wine.').split('.')[0]!;
+    const seed = Object.keys(o.files).sort().find((p) => p.startsWith('seed/') && p.endsWith('.json'));
+    for (const w of JSON.parse(seed ? o.files[seed]! : '[]') as Record<string, unknown>[]) {
       await tx`insert into public.records (tenant_id, env, entity_type, attrs, spec_digest, created_by, provenance)
-               values (${o.tenantId}, ${o.env}, 'wine', ${tx.json(w as never)}, ${o.seedDigest}, 'import', ${tx.json({ source: 'eval fixture' })})`;
+               values (${o.tenantId}, ${o.env}, ${object}, ${tx.json(w as never)}, ${o.seedDigest}, 'import', ${tx.json({ source: 'eval fixture' })})`;
     }
   });
   return { inserted };
