@@ -94,10 +94,58 @@ when { context.input.payment == "cod" && context.quote.total > 30000 };`);
     expect(n('tool:message.send').boundedBy).toEqual(['policy:send.requires_grounding']);
   });
 
+  it('emits each trigger parsed, for the records trigger in Postgres (P3.D2.3)', () => {
+    expect(compile(marani(), lock()).bundle.triggers).toEqual({
+      dispatch_on_confirm: { on: 'order.status -> confirmed', call: 'delivery.dispatch', object: 'order', field: 'status', values: ['confirmed'] },
+      notify_on_job_status: { on: 'delivery_job.status -> picked_up|delivered|failed', call: 'customer.notify', object: 'delivery_job', field: 'status',
+                              values: ['delivered', 'failed', 'picked_up'] },
+      payout_on_delivery: { on: 'delivery_job.status -> delivered', call: 'payout.compute', object: 'delivery_job', field: 'status', values: ['delivered'] },
+    });
+  });
+
   it('parses every fixture Cedar file (P1.D2.7)', () => {
     for (const [path, text] of Object.entries(marani().files)) {
       if (path.endsWith('.cedar')) expect(checkParsePolicySet({ staticPolicies: text }), path).toEqual({ type: 'success' });
     }
+  });
+});
+
+describe('Cedar schema, permits and facts (plan §5.5)', () => {
+  it('plans the facts that each action’s policies read', () => {
+    const { facts } = compile(marani(), lock()).bundle.policies;
+    expect(facts['order.create']).toEqual({ objects: [{ attr: 'customer', object: 'customer', via: 'customer', by: 'id' }], defaults: { discount_pct: 0 }, keyInputs: {}, quote: true });
+    expect(facts['delivery.status']).toEqual({ objects: [{ attr: 'order', object: 'order', via: 'order', by: 'key' }], defaults: {}, keyInputs: { order: 'order', phone: 'customer' }, quote: false });
+    expect(facts['delivery.dispatch']!.objects).toEqual([{ attr: 'order', object: 'order', via: 'order', by: 'id' }]);
+    expect(facts['catalog.search']).toEqual({ objects: [], defaults: {}, keyInputs: {}, quote: false });
+  });
+
+  it('gives policies the context they read, with derived ref keys', () => {
+    const actions = (compile(marani(), lock()).bundle.policies.schema as Record<string, { actions: Record<string, { appliesTo: { context: { attributes: Record<string, { attributes?: Record<string, unknown> }> } } }> }>)['']!.actions;
+    const ctx = (a: string) => actions[a]!.appliesTo.context.attributes;
+    expect(Object.keys(ctx('order.create')).sort()).toEqual(['approvals', 'customer', 'input', 'quote']);
+    expect(ctx('delivery.status').order!.attributes!.customer_phone).toEqual({ type: 'String' });
+    expect(ctx('order.create').input!.attributes!.discount_pct).toEqual({ type: 'Long' });          // default filled: required
+    expect(Object.keys(ctx('message.send')).sort()).toEqual(['payload_digest', 'signals']);
+    expect(Object.keys(ctx('message.send').signals!.attributes!).sort()).toEqual(['commitment', 'grounded']);
+  });
+
+  it('generates permits from agents.*.tools and triggers', () => {
+    const { byId } = compile(marani(), lock()).bundle.policies;
+    expect(byId['permit.agent.dispatch_node']).toBe(
+      'permit (principal == Agent::"dispatch_node", action in [Action::"delivery.dispatch", Action::"delivery.update", Action::"handoff.staff", Action::"message.send", Action::"payout.compute"], resource);');
+    expect(byId['permit.trigger.notify_on_job_status']).toBe('permit (principal == Trigger::"notify_on_job_status", action == Action::"customer.notify", resource);');
+  });
+
+  it('rejects a policy reading an attribute the context does not have', () => {
+    const tree = marani();
+    tree.files['policies/orders.cedar'] += '\n@id("order.vip_only")\nforbid (principal, action == Action::"order.create", resource)\nunless { context.customer.vip };\n';
+    expect(errorsOf(tree).join('\n')).toMatch(/^policies\/orders\.cedar#order\.vip_only: .*vip/m);
+  });
+
+  it('rejects a policy reading an optional input without a has guard', () => {
+    const tree = marani();
+    tree.files['policies/orders.cedar'] += '\n@id("order.no_tbilisi_names")\nforbid (principal, action == Action::"customer.upsert", resource)\nwhen { context.input.name == "x" };\n';
+    expect(errorsOf(tree).join('\n')).toMatch(/order\.no_tbilisi_names: .*optional attribute/);
   });
 });
 

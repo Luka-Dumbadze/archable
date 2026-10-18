@@ -2,6 +2,7 @@
 // `x-archable: {semantics: "money", currency, scale: 2}` (plan §4.3); everything unordered is sorted (I2).
 import type { JsonSchema } from '@archable/contracts';
 import type { Field, Spec } from '@archable/schema';
+import { cedarArtifacts } from './cedar-schema';
 import { digestOf } from './digest';
 import { boundsOf } from './policy-bounds';
 import type { Errors } from './errors';
@@ -154,10 +155,11 @@ export function lower(r: Resolved, errors: Errors): { bundle: Lowered; projectio
   const channels: Bundle['channels'] = {};
   for (const [id, c] of Object.entries(spec.channels)) {
     channels[id] = c.kind === 'web'
-      ? { kind: 'web', public: { greeting: c.greeting, launcher: c.launcher, brand: spec.ui.theme.brand }, embed_origins: sorted(c.embed_origins) }
+      ? { kind: 'web', public: { greeting: c.greeting, launcher: c.launcher, brand: spec.ui.theme.brand, embed_origins: sorted(c.embed_origins) } }
       : { kind: c.kind };
   }
 
+  const cedar = cedarArtifacts(spec, r.policies, errors);
   const bounds = r.policies
     .flatMap((p) => boundsOf(p.json))
     .sort((a, b) => (a.policy + a.path < b.policy + b.path ? -1 : a.policy + a.path > b.policy + b.path ? 1 : 0));
@@ -171,11 +173,13 @@ export function lower(r: Resolved, errors: Errors): { bundle: Lowered; projectio
     objects,
     tools,
     agents,
-    triggers: spec.triggers,
+    triggers: Object.fromEntries(Object.entries(spec.triggers).map(([id, t]) => [id, { ...t, ...r.triggers[id]!, values: [...r.triggers[id]!.values].sort() }])),
     decisions: spec.decisions,
-    // Cedar schema validation needs the gateway's context shape (plan §5.5, Phase 2); until then, null.
-    policies: { byId: Object.fromEntries(r.policies.map((p) => [p.id, p.text])), schema: null, bounds },
+    // byId: the policy files plus the generated permits; schema and facts: the context the gateway builds (cedar-schema.ts).
+    policies: { byId: { ...Object.fromEntries(r.policies.map((p) => [p.id, p.text])), ...cedar.permits }, schema: cedar.schema, bounds, facts: cedar.facts },
     channels,
+    apps: Object.fromEntries(Object.entries(spec.apps).map(([id, a]) => [id, { template: a.template, agent: a.agent ?? null, channels: [...(a.channels ?? [])] }])),
+    params: Object.fromEntries(Object.entries(r.params).sort(([a], [b]) => (a < b ? -1 : 1))),
     ui: spec.ui,
     evals: {
       suites: spec.evals.suites,
