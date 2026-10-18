@@ -169,10 +169,12 @@ try {
     run(['scripts/provision-tenant-repo.ts', '--tenant', slug]);
     return `archable-tenants/${slug} · ruleset archable-governance`;
   });
-  await say(`${os} is live. 🎉\n\nYour customers talk to the Tech Advisor on Telegram and on your website. Couriers are booked by the Dispatch Node. Every change you ask me for is drafted, tested and sent to you to approve.\n\nTell me what should work differently, any time.`,
+  await say(`${os} is live. 🎉\n\nYour customers will talk to the Tech Advisor on Telegram. Couriers are booked by the Dispatch Node. Every change you ask me for is drafted, tested and sent to you to approve.\n\nTo open the shop to customers: create a bot with @BotFather and paste its token here.\nTell me what should work differently, any time.`,
     { reply_markup: { inline_keyboard: [[{ text: 'Open the code (GitHub)', url: `https://github.com/archable-tenants/${slug}` }]] } });
   console.log(JSON.stringify({ slug, digest: compiled.digest, discount, large }));
 } finally {
+  // Confirm what was read here, or Telegram hands the owner's last answer to the webhook as a new request.
+  if (!dry) await tg('getUpdates', { offset, timeout: 0 });
   await tg('setWebhook', { url: webhook.url, secret_token: webhook.secret });
   console.log('webhook restored');
 }
