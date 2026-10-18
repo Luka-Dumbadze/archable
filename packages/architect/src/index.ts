@@ -1,1 +1,8 @@
-export {};
+export { clusterFailure, TRIGGER, type ClusterDeps, type ClusterResult, type Failure } from './cluster';
+export { closeEvalEnv, evalHost, openEvalEnv, type HostDeps, type Registered } from './eval-host';
+export { EvalCase, parseCase, runCase, runOnce, wilsonLower, type CaseResult, type EvalHost, type RunResult } from './evals';
+export { heal, type Base, type HealDeps, type HealResult, type Head } from './heal';
+export { intake, INTENTS, normalize, type IntakeDeps, type IntakeResult } from './intake';
+export { draftPatch, reproduce, type DesireBrief, type Lane, type PatchContext } from './patch';
+export { desireStore, type DesireSource, type DesireStore, type Evidence, type OpenDesire } from './store';
+export { selectTests, verify, type Selection, type Verification } from './verify';

@@ -8,5 +8,17 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@ai-sdk/provider": "4.0.29",
+    "@archable/compiler": "workspace:*",
+    "@archable/contracts": "workspace:*",
+    "@archable/runtime": "workspace:*",
+    "@archable/schema": "workspace:*",
+    "@archable/spec-writer": "workspace:*",
+    "ai": "7.0.143",
+    "postgres": "3.4.9",
+    "yaml": "2.9.1",
+    "zod": "4.6.7"
   }
 }
