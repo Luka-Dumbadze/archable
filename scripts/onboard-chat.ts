@@ -130,7 +130,7 @@ try {
     for (const f of walk(ROOT)) files[relative(ROOT, f).split(sep).join('/')] = readFileSync(f, 'utf8').replace(/\r\n/g, '\n');
     let s = files['enterprise.spec.yaml']!;
     s = s.replace(/^# enterprise\.spec\.yaml:.*$/m, `# enterprise.spec.yaml: ${os}, ${p.kind} in ${p.city} (onboarded by conversation)`)
-      .replace(/  id: elektro(\s+#.*)?\n/, `  id: ${slug.replace(/-/g, '_')}\n`)   // spec ids: [a-z_][a-z0-9_]*; the slug keeps its hyphen.replace('  name: Elektro Tbilisi\n', `  name: ${p.business_name}\n`).replace('  os_name: Elektro OS', `  os_name: ${os}`)
+      .replace(/  id: elektro(\s+#.*)?\n/, `  id: ${slug.replace(/-/g, '_')}\n`).replace('  name: Elektro Tbilisi\n', `  name: ${p.business_name}\n`).replace('  os_name: Elektro OS', `  os_name: ${os}`)   // spec ids: [a-z_][a-z0-9_]*; the slug keeps its hyphen
       .replace('values: [phones, laptops, tvs, audio, appliances, accessories]', `values: [${cats.map((c) => c.id).join(', ')}]`)
       .replace(/        value_labels:\n(?:          [a-z_]+: \{[^\n]*\}\n)+/, `        value_labels:\n${cats.map((c) => `          ${c.id}: { en: ${JSON.stringify(c.en)}, ka: ${JSON.stringify(c.ka)} }`).join('\n')}\n`)
       .replace(/elektro-courier/g, `${slug}-courier`).replace(/vault:elektro\//g, `vault:${slug}/`).replace('https://elektro.ge', `https://${slug}.ge`);
@@ -174,8 +174,11 @@ try {
     run(['scripts/provision-tenant-repo.ts', '--tenant', slug]);
     return `archable-tenants/${slug} · ruleset archable-governance`;
   });
-  await say(`${os} is live. 🎉\n\nYour customers will talk to the Tech Advisor on Telegram. Couriers are booked by the Dispatch Node. Every change you ask me for is drafted, tested and sent to you to approve.\n\nTo open the shop to customers: create a bot with @BotFather and paste its token here.\nTell me what should work differently, any time.`,
-    { reply_markup: { inline_keyboard: [[{ text: 'Open the code (GitHub)', url: `https://github.com/archable-tenants/${slug}` }]] } });
+  await say(`${os} is live. 🎉\n\nYour customers will talk to the Tech Advisor on Telegram. Couriers are booked by the Dispatch Node. Every change you ask me for is drafted, tested and sent to you to approve.\n\nTo open the shop to customers: create a bot with @BotFather and paste its token here.\nTell me what should work differently, any time.\n\nYour Business OS: https://archable.lovable.app/?biz=${slug}`,
+    { reply_markup: { inline_keyboard: [
+      [{ text: 'Open your Business OS', url: `https://archable.lovable.app/?biz=${encodeURIComponent(slug)}` }],
+      [{ text: 'Open the code (GitHub)', url: `https://github.com/archable-tenants/${slug}` }],
+    ] } });
   console.log(JSON.stringify({ slug, digest: compiled.digest, discount, large }));
 } finally {
   // Confirm what was read here, or Telegram hands the owner's last answer to the webhook as a new request.
