@@ -21,6 +21,7 @@ export interface GovernanceWiring {
   kick?(): void;                                      // start the queue drain now (architect-wiring.ts)
 }
 
+type Taken = { outcome: string; tenant_id: string | null; action: string | null; payload: { desire?: string } | null };
 const PRESS_PATH = '/v1/owner/press';                 // web: POST with body; Telegram: callback_data = body.ref
 const REF_HOURS = 24;
 
@@ -37,6 +38,40 @@ export function createGovernanceDeps(w: GovernanceWiring) {
       return ref;
     });
   const press = (label: string, ref: string): OwnerButton => ({ label, action: 'post', path: PRESS_PATH, body: { ref } });
+
+  // The owner conversation, whichever channel it arrives on: Telegram and the web call these with the same facts.
+  async function replyTo(t: { tenant_id: string; membership_id: string; slug: string; os_name: string }, text: string): Promise<OwnerReply> {
+    const r = await intake({ ...w.intake, store }, { tenantId: t.tenant_id, membershipId: t.membership_id, text, at: new Date().toISOString() });
+    if (r.outcome === 'not_a_change') {
+      return { text: `Tell me what should work differently in ${t.os_name}, and I’ll prepare the change for you to approve.`,
+               buttons: [{ label: `Open ${t.os_name}`, action: 'url', url: `https://${t.slug}.archable.run` }] };
+    }
+    const d = r.desire;
+    const [draft, decline] = await Promise.all([
+      mintRef(t.tenant_id, t.membership_id, 'draft_desire', { desire: d.id }),
+      mintRef(t.tenant_id, t.membership_id, 'decline_desire', { desire: d.id }),
+    ]);
+    const lead = r.outcome === 'attached' ? `This is like an earlier request (D-${d.number}):` : `I understood (D-${d.number}):`;
+    return { text: `${lead}\n“${d.statement}”`, buttons: [press('Draft it', draft), press('Not this', decline)] };
+  }
+
+  async function pressed(r: Taken | undefined): Promise<OwnerReply | null> {
+    if (!r || r.outcome !== 'ok' || !r.tenant_id || !r.payload?.desire) return null;
+    const tenantId = r.tenant_id, desire = r.payload.desire;
+    if (r.action === 'decline_desire') {
+      await withTenant(control, tenantId, (tx) => tx`update public.desires set status = 'declined', updated_at = now() where tenant_id = ${tenantId} and id = ${desire}`);
+      return { text: 'OK, I’ve set it aside.', buttons: [] };
+    }
+    if (r.action === 'draft_desire') {
+      await withTenant(control, tenantId, async (tx) => {
+        await tx`update public.desires set status = 'drafting', updated_at = now() where tenant_id = ${tenantId} and id = ${desire} and status = 'open'`;
+        await tx`select private.architect_send(${tx.json({ kind: 'draft', tenant_id: tenantId, desire_id: desire })})`;
+      });
+      w.kick?.();                                     // the draft starts now, not at the next cron tick
+      return { text: 'Drafting it now. I’ll send you the change to approve once it’s checked.', buttons: [] };
+    }
+    return null;
+  }
 
   return {
     async consume(a: TapArgs & { decision: 'approve' | 'reject' }): Promise<{ outcome: Outcome; change_request_id: string | null }> {
@@ -82,46 +117,36 @@ export function createGovernanceDeps(w: GovernanceWiring) {
       return null;
     },
 
-    /** Owner text → the normalized statement with Draft it / Not this (plan §7.7). */
+    /** Owner text → the normalized statement with Draft it / Not this (plan §7.7). Telegram: by the user's id. */
     async ownerMessage(tgUserId: number, text: string): Promise<OwnerReply> {
       const [t] = await ownerTenants(tgUserId);
       if (!t) return { text: 'This Telegram account doesn’t own a business on Archable yet.', buttons: [] };
-      const r = await intake({ ...w.intake, store }, { tenantId: t.tenant_id, membershipId: t.membership_id, text, at: new Date().toISOString() });
-      if (r.outcome === 'not_a_change') {
-        return { text: `Tell me what should work differently in ${t.os_name}, and I’ll prepare the change for you to approve.`,
-                 buttons: [{ label: `Open ${t.os_name}`, action: 'url', url: `https://${t.slug}.archable.run` }] };
-      }
-      const d = r.desire;
-      const [draft, decline] = await Promise.all([
-        mintRef(t.tenant_id, t.membership_id, 'draft_desire', { desire: d.id }),
-        mintRef(t.tenant_id, t.membership_id, 'decline_desire', { desire: d.id }),
-      ]);
-      const lead = r.outcome === 'attached' ? `This is like an earlier request (D-${d.number}):` : `I understood (D-${d.number}):`;
-      return { text: `${lead}\n“${d.statement}”`, buttons: [press('Draft it', draft), press('Not this', decline)] };
+      return replyTo(t, text);
+    },
+    /** The same reply on the web (plan §8.4), for the owner's Supabase session: one function, so both channels agree. */
+    async ownerMessageFor(member: { tenantId: string; membershipId: string }, text: string): Promise<OwnerReply> {
+      const [t] = await withTenant(control, member.tenantId, (tx) => tx<{ slug: string; os_name: string }[]>`
+        select slug, os_name from public.tenants where id = ${member.tenantId}`);
+      return replyTo({ tenant_id: member.tenantId, membership_id: member.membershipId, slug: t!.slug, os_name: t!.os_name }, text);
     },
 
     /** A post button by its ref: single use, the owner it was minted for, within 24 h; null when not (Q9 (2)). */
     async ownerPress(tgUserId: number, ref: string): Promise<OwnerReply | null> {
-      const [r] = await control<{ outcome: string; tenant_id: string | null; action: string | null; payload: { desire?: string } | null }[]>`
-        select outcome, tenant_id, action, payload from private.take_owner_ref(${ref}, ${tgUserId})`;
-      if (!r || r.outcome !== 'ok' || !r.tenant_id || !r.payload?.desire) return null;
-      const tenantId = r.tenant_id, desire = r.payload.desire;
-      if (r.action === 'decline_desire') {
-        await withTenant(control, tenantId, (tx) => tx`update public.desires set status = 'declined', updated_at = now() where tenant_id = ${tenantId} and id = ${desire}`);
-        return { text: 'OK, I’ve set it aside.', buttons: [] };
-      }
-      if (r.action === 'draft_desire') {
-        await withTenant(control, tenantId, async (tx) => {
-          await tx`update public.desires set status = 'drafting', updated_at = now() where tenant_id = ${tenantId} and id = ${desire} and status = 'open'`;
-          await tx`select private.architect_send(${tx.json({ kind: 'draft', tenant_id: tenantId, desire_id: desire })})`;
-        });
-        w.kick?.();                                   // the draft starts now, not at the next cron tick
-        return { text: 'Drafting it now. I’ll send you the change to approve once it’s checked.', buttons: [] };
-      }
-      return null;
+      const [r] = await control<Taken[]>`select outcome, tenant_id, action, payload from private.take_owner_ref(${ref}, ${tgUserId})`;
+      return pressed(r);
+    },
+    /** The same press on the web, checked against the session's membership. */
+    async ownerPressFor(member: { membershipId: string }, ref: string): Promise<OwnerReply | null> {
+      const [r] = await control<Taken[]>`select outcome, tenant_id, action, payload from private.take_owner_ref_for_member(${ref}, ${member.membershipId})`;
+      return pressed(r);
     },
 
     undo: (tgUserId: number, ref: string) => undo(control, tgUserId, ref),
+
+    /** A change's frozen card (plan §7.5), for a member of its tenant (GET /v1/owner/changes/:id/rationale). */
+    rationaleCard: (tenantId: string, changeRequestId: string) => withTenant(control, tenantId, async (tx) =>
+      (await tx<{ rationale: RationaleCard | null }[]>`select rationale from public.change_requests
+        where tenant_id = ${tenantId} and id = ${changeRequestId}`)[0]?.rationale ?? null),
   };
 }
 
