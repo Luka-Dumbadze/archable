@@ -301,15 +301,27 @@ importers:
 
   packages/governance:
     dependencies:
+      '@archable/compiler':
+        specifier: workspace:*
+        version: link:../compiler
       '@archable/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@archable/schema':
+        specifier: workspace:*
+        version: link:../schema
       canonicalize:
         specifier: 5.1.0
         version: 5.1.0
       octokit:
         specifier: 5.0.5
         version: 5.0.5
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
 
   packages/runtime:
     dependencies:
