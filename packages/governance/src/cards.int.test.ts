@@ -75,6 +75,16 @@ describe.skipIf(!live)('approval cards against archable', { timeout: 30_000 }, (
     expect((await consume(messageId, 'approve'))[0]!.outcome).toBe('step_up_required');
   });
 
+  it('a decision merges its evidence into the card’s: rationale_digest and the text survive (Q11)', async () => {
+    const [r] = await inT((tx) => tx<{ outcome: string }[]>`select outcome from public.consume_telegram_approval(${sha256(nonce)}, ${owner.tg},
+      ${owner.tg}, ${messageId}, 'reject', ${tx.json({ callback_query_id: 'cq-1' })})`);
+    expect(r!.outcome).toBe('rejected');
+    const [a] = await inT((tx) => tx<{ evidence: Record<string, unknown> }[]>`select evidence from public.approvals where nonce_hash = ${sha256(nonce)}`);
+    expect(a!.evidence).toMatchObject({ rationale_digest: 'sha256:' + '2'.repeat(64), summary: expect.stringContaining('What changes:'), callback_query_id: 'cq-1' });
+    // Re-open it for the cases below: a rejection would otherwise decide them.
+    await inT((tx) => tx`update public.approvals set status = 'pending', decided_at = null where nonce_hash = ${sha256(nonce)}`);
+  });
+
   it('a retried issue for the same head sends nothing', async () => {
     const [r] = await issueCards({ control, ...telegram }, cr(), bundle, OPS, { slug });
     expect(r).toMatchObject({ outcome: 'already_sent' });

@@ -208,6 +208,9 @@ importers:
       '@ai-sdk/openai':
         specifier: 4.0.96
         version: 4.0.96(zod@4.6.7)
+      '@archable/architect':
+        specifier: workspace:*
+        version: link:../../packages/architect
       '@archable/compiler':
         specifier: workspace:*
         version: link:../../packages/compiler
