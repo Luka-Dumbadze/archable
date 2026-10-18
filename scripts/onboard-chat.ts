@@ -152,6 +152,9 @@ try {
       warranty_months: Math.max(0, Math.min(60, Math.round(x.warranty_months))), price: Math.round(x.price_gel * 100), stock: Math.max(0, Math.round(x.stock)),
     }));
     files['seed/products.json'] = JSON.stringify(items, null, 2) + '\n';
+    // The smoke eval asks for a product this catalog has (the archetype's asks for an iPhone 15).
+    const smoke = 'evals/smoke/catalog-price-01.yaml';
+    if (files[smoke]) files[smoke] = files[smoke]!.replace(/iPhone 15/g, items[0]!.label);
     return `${items.length} products, from ${Math.min(...items.map((i) => i.price)) / 100} to ${Math.max(...items.map((i) => i.price)) / 100} GEL`;
   });
   let compiled!: ReturnType<typeof compile>;
