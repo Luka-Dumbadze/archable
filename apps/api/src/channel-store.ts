@@ -93,6 +93,50 @@ export function createChannelStore(db: { runtime: postgres.Sql; control: postgre
       return r!.first;
     },
 
+    // ── SendDeps (channels/telegram/send.ts): tenant-bot delivery, in the tenant's scope ──
+    /** The bot token from Vault at the last hop (private.channel_secret only returns this tenant's secrets). */
+    async channelToken(tenantId: string, name: string): Promise<string> {
+      return withTenant(runtime, tenantId, async (tx) => {
+        const [s] = await tx<{ token: string | null }[]>`select private.channel_secret(${name}) as token`;
+        if (!s?.token) throw new Error('channel token not found');
+        return s.token;
+      });
+    },
+
+    /** A tenant-bot reply, recorded on the turn it answers: the conversation's latest inbound message. */
+    async recordTelegramReply(tenantId: string, chatId: number, text: string, telegramMessageId: number | null): Promise<number> {
+      return withTenant(runtime, tenantId, async (tx) => {
+        const [m] = await tx<{ id: string }[]>`
+          insert into public.messages (tenant_id, conversation_id, chapter_id, turn_id, direction, author, body, spec_digest, external_id)
+          select m.tenant_id, m.conversation_id, m.chapter_id, m.turn_id, 'out', 'agent', ${text}, m.spec_digest,
+                 ${telegramMessageId === null ? null : String(telegramMessageId)}
+            from public.messages m join public.conversations c on c.tenant_id = m.tenant_id and c.id = m.conversation_id
+           where m.tenant_id = ${tenantId} and c.external_id = ${String(chatId)} and m.direction = 'in'
+           order by m.id desc limit 1
+          returning id`;
+        if (!m) throw new Error('no inbound message to answer');
+        return Number(m.id);
+      });
+    },
+
+    /** A blocked bot: the channel stops taking turns until the owner reconnects it. */
+    async pauseChannel(tenantId: string, channelId: string, reason: string): Promise<void> {
+      await withTenant(runtime, tenantId, (tx) => tx`
+        update public.channel_connections set status = 'paused', updated_at = now()
+         where tenant_id = ${tenantId} and id = ${channelId} and status = 'live'`)
+        .catch((e: unknown) => console.log(JSON.stringify({ event: 'channel.pause_failed', tenant: tenantId, reason, error: String(e) })));
+    },
+
+    /** Fixed answers outside a turn: the spec's greeting, or the text-only reply (no voice, CLAUDE.md §3). */
+    async noticeText(tenantId: string, kind: 'text_only' | 'greeting'): Promise<string> {
+      if (kind === 'text_only') return 'Please type your message.';
+      const [t] = await withTenant(runtime, tenantId, (tx) => tx<{ active_digest: string | null }[]>`
+        select active_digest from public.tenants where id = ${tenantId}`);
+      const bundle = t?.active_digest && db.bundles ? await db.bundles.load(tenantId, t.active_digest) : null;
+      const web = bundle ? Object.values(bundle.channels).find((c) => c.kind === 'web')?.public : undefined;
+      return web?.greeting.en ?? 'Hi! How can I help?';
+    },
+
     // ── WidgetDeps (P3.D2.2) ──
     /** The public projection of the active bundle's web channel (channels.web_chat + ui.theme); null if chat is off. */
     async widgetConfig(slug: string): Promise<WidgetConfig | null> {
