@@ -24,10 +24,11 @@ app.get("/healthz", (c) => c.json({ ok: true }));
 
 // DEV-1: customer channels: web chat, widget, tenant-bot webhooks, @ArchableBot, tenant CORS (plan §6.4).
 import { mountChannels } from "./channels/mount";
-mountChannels(app);
+const handleTurn = createTurnEngine();
+mountChannels(app, process.env, handleTurn);
 
 // DEV-2: console turns (plan §5.6)
-app.route("/", turnRoutes({ memberFromJwt, handleTurn: createTurnEngine(), newTurnId: randomUUID }));
+app.route("/", turnRoutes({ memberFromJwt, handleTurn, newTurnId: randomUUID }));
 
 // DEV-2: shell boot (v3 §2.4, plan §8.2): the manifest by origin, and a digest's UI projection for a member (P5.D2.1).
 const shell = createShellStore(runtimeDb);

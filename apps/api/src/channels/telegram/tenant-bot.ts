@@ -9,7 +9,7 @@ export type NoticeKind = 'text_only' | 'greeting';
 
 export interface TenantBotDeps {
   handleTurn: HandleTurn;
-  deliverNotice(hook: BotHook, reply: ReplyTarget, kind: NoticeKind): Promise<void>;
+  deliverNotice?(hook: BotHook, reply: ReplyTarget, kind: NoticeKind): Promise<void>;
 }
 
 export function tenantBotDispatcher(d: TenantBotDeps) {
@@ -18,8 +18,8 @@ export function tenantBotDispatcher(d: TenantBotDeps) {
     if (!m || m.chat.type !== 'private') return;                          // groups and channels are out of scope
     const reply: ReplyTarget = { kind: 'telegram', channelId: hook.channel_id, botId: hook.bot_id,
                                  tokenSecret: hook.token_secret, chatId: m.chat.id };
-    if (!m.text) return d.deliverNotice(hook, reply, 'text_only');      // voice, audio, photos: "please type"
-    if (m.text.startsWith('/start')) return d.deliverNotice(hook, reply, 'greeting');
+    if (!m.text) { if (d.deliverNotice) await d.deliverNotice(hook, reply, 'text_only'); return; } // voice, audio, photos
+    if (m.text.startsWith('/start')) { if (d.deliverNotice) await d.deliverNotice(hook, reply, 'greeting'); return; }
     await d.handleTurn({
       turnId: randomUUID(), tenantId: hook.tenant_id, env: 'prod', channel: 'telegram',
       conversationKey: String(m.chat.id), externalMessageId: String(m.message_id), text: m.text,

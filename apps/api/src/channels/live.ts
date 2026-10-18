@@ -1,25 +1,42 @@
-// apps/api/src/channels/live.ts: the customer channels' real deps, where DEV-2's side is ready end to end
-// (channel-store.ts, P3.D2.1). A flow is wired only when it works end to end; the rest stays on the fail-closed
-// stand-ins in unwired.ts:
-//   wired:   widget config; @ArchableBot channel binding (owner tenants, link intents, Business connect, tenant bot
-//            token, revoke, pause agent)
-//   waiting: web chat and tenant-bot dispatch (handleTurn needs a deliver that records outbound messages and reads
-//            the bot token from Vault); approvals, owner intake and Undo (governance, P4.D2.7)
-import { createBundles } from '@archable/runtime';
+// apps/api/src/channels/live.ts: the customer's web chat and bot turn entry points use the runtime engine;
+// sessions, message polling and channel routing resolve through the SQL-backed channel store.
+// Governance actions remain on the fail-closed stand-ins in unwired.ts until their store is ready.
+import { createBundles, type HandleTurn } from '@archable/runtime';
 import { createChannelStore } from '../channel-store';
 import { controlDb, runtimeDb, withTenant } from '../db';
+import { createTurnEngine } from '../turn-wiring';
 import type { ArchableBotDeps } from './telegram/archable-bot';
+import { tenantBotDispatcher } from './telegram/tenant-bot';
 import type { WidgetDeps } from '../routes/widget';
-import { archableBotDeps as unwiredBot, chatDeps, webhookDeps, widgetDeps as unwiredWidget } from './unwired';
+import type { ChatDeps } from '../routes/chat';
+import type { WebhookDeps } from '../routes/webhooks';
+import { archableBotDeps as unwiredBot, chatDeps as unwiredChat, webhookDeps as unwiredWebhook, widgetDeps as unwiredWidget } from './unwired';
 
 type Store = Pick<ReturnType<typeof createChannelStore>,
-  'widgetConfig' | 'ownerTenants' | 'createLinkIntent' | 'bindBusinessConnection' | 'resolveBusinessConnection' |
-  'bindTenantBot' | 'revokeChannel' | 'pauseAgent'>;
+  'openSession' | 'resumeSession' | 'recentInbound' | 'existingReply' | 'outboundAfter' |
+  'resolveBotHook' | 'firstSeen' | 'widgetConfig' | 'ownerTenants' | 'createLinkIntent' |
+  'bindBusinessConnection' | 'resolveBusinessConnection' | 'bindTenantBot' | 'revokeChannel' | 'pauseAgent'>;
 
 export function liveChannelDeps(store: Store = createChannelStore({
   runtime: runtimeDb, control: controlDb, bundles: createBundles((tenantId, fn) => withTenant(runtimeDb, tenantId, fn)),
-})) {
+}), handleTurn: HandleTurn = createTurnEngine()) {
+  const chatDeps: ChatDeps = {
+    key: unwiredChat.key,
+    openSession: (slug, env, secretHash, origin) => store.openSession(slug, env, secretHash, origin),
+    resumeSession: (secretHash) => store.resumeSession(secretHash),
+    recentInbound: (claims, seconds) => store.recentInbound(claims, seconds),
+    existingReply: (claims, clientMsgId) => store.existingReply(claims, clientMsgId),
+    outboundAfter: (claims, afterId) => store.outboundAfter(claims, afterId),
+    handleTurn,
+    newTurnId: unwiredChat.newTurnId,
+  };
   const widgetDeps: WidgetDeps = { widgetConfig: (slug) => store.widgetConfig(slug) };
+  const webhookDeps: WebhookDeps = {
+    ...unwiredWebhook,
+    resolveBotHook: (hookId) => store.resolveBotHook(hookId),
+    firstSeen: (botId, updateId) => store.firstSeen(botId, updateId),
+    dispatchTenantUpdate: tenantBotDispatcher({ handleTurn }),
+  };
   const archableBotDeps: ArchableBotDeps = {
     ...unwiredBot,
     ownerTenants: (u) => store.ownerTenants(u),
@@ -29,6 +46,7 @@ export function liveChannelDeps(store: Store = createChannelStore({
     bindTenantBot: (a) => store.bindTenantBot(a),
     revokeChannel: (t, c) => store.revokeChannel(t, c),
     pauseAgent: (t, k, m) => store.pauseAgent(t, k, m),
+    runTurn: handleTurn,
   };
   return { chatDeps, webhookDeps, widgetDeps, archableBotDeps };
 }
@@ -37,5 +55,5 @@ export function liveChannelDeps(store: Store = createChannelStore({
 export function channelDeps(env: Record<string, string | undefined>, live: () => ReturnType<typeof liveChannelDeps> = liveChannelDeps) {
   return env.DATABASE_URL_RUNTIME && env.DATABASE_URL_CONTROL
     ? live()
-    : { chatDeps, webhookDeps, widgetDeps: unwiredWidget, archableBotDeps: unwiredBot };
+    : { chatDeps: unwiredChat, webhookDeps: unwiredWebhook, widgetDeps: unwiredWidget, archableBotDeps: unwiredBot };
 }

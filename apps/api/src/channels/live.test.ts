@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { HandleTurn, Inbound } from "@archable/runtime";
 import { channelDeps, liveChannelDeps } from "./live";
 import { archableBotDeps as unwiredBot, chatDeps, webhookDeps, widgetDeps as unwiredWidget } from "./unwired";
 
@@ -7,6 +8,10 @@ function store() {
   const calls: string[] = [];
   const f = <T,>(name: string, v: T) => vi.fn(async (..._a: unknown[]) => { calls.push(name); return v; });
   const s = {
+    openSession: f("openSession", { tenant_id: "t", session_id: "s", conversation_id: "c" }),
+    resumeSession: f("resumeSession", { tenant_id: "t", session_id: "s", conversation_id: "c", env: "prod" as const, slug: "marani" }),
+    recentInbound: f("recentInbound", 0), existingReply: f("existingReply", null), outboundAfter: f("outboundAfter", []),
+    resolveBotHook: f("resolveBotHook", null), firstSeen: f("firstSeen", true),
     widgetConfig: f("widgetConfig", { greeting: { en: "Hi" }, launcher: { label: { en: "Chat" }, position: "right" as const }, brand: "#7B1E3A", embed_origins: [] }),
     ownerTenants: f("ownerTenants", []), createLinkIntent: f("createLinkIntent", undefined),
     bindBusinessConnection: f("bindBusinessConnection", { outcome: "bound" as const, tenant_id: "t" }),
@@ -48,11 +53,38 @@ describe("live deps: wired only where ready end to end", () => {
     expect(calls).toEqual(["widgetConfig", "ownerTenants", "createLinkIntent", "bindBusinessConnection", "resolveBusinessConnection", "bindTenantBot", "revokeChannel", "pauseAgent"]);
   });
 
-  it("chat, tenant-bot webhooks, turns and governance stay fail-closed", async () => {
-    const d = liveChannelDeps(store().s);
-    expect(d.chatDeps).toBe(chatDeps);
-    expect(d.webhookDeps).toBe(webhookDeps);
-    await expect(d.archableBotDeps.runTurn({} as never)).rejects.toThrow(/not wired/);
+  it("chat session and message lookups use the SQL-backed channel store", async () => {
+    const { s, calls } = store();
+    const handleTurn: HandleTurn = async (i) => ({ turnId: i.turnId, text: "ok", allowed: true, outboundMessageId: 1, paused: false });
+    const d = liveChannelDeps(s, handleTurn);
+    const claims = { tid: "t", sid: "s", cid: "c", env: "prod" as const };
+    await d.chatDeps.openSession("marani", "prod", Buffer.alloc(32), null);
+    await d.chatDeps.resumeSession(Buffer.alloc(32));
+    await d.chatDeps.recentInbound(claims, 60);
+    await d.chatDeps.existingReply(claims, "message-id");
+    await d.chatDeps.outboundAfter(claims, 0);
+    await d.webhookDeps.resolveBotHook("hook");
+    await d.webhookDeps.firstSeen(1, 2);
+    expect(calls).toEqual(["openSession", "resumeSession", "recentInbound", "existingReply", "outboundAfter", "resolveBotHook", "firstSeen"]);
+    expect(d.chatDeps.handleTurn).toBe(handleTurn);
+  });
+
+  it("shares the runtime turn handler with web chat and tenant bot dispatch", async () => {
+    const turns: Inbound[] = [];
+    const handleTurn: HandleTurn = async (i) => {
+      turns.push(i);
+      return { turnId: i.turnId, text: "ok", allowed: true, outboundMessageId: 1, paused: false };
+    };
+    const d = liveChannelDeps(store().s, handleTurn);
+    const hook = { tenant_id: "t", channel_id: "c", bot_id: 1, hook_secret_hash: Buffer.alloc(32), token_secret: "marani/tg_bot_token" };
+    await d.webhookDeps.dispatchTenantUpdate(hook, { update_id: 1, message: {
+      message_id: 42, date: 0, chat: { id: 555, type: "private", first_name: "Nino" },
+      from: { id: 555, is_bot: false, first_name: "Nino" }, text: "gamarjoba",
+    } } as never);
+    expect(turns).toHaveLength(1);
+    expect(turns[0]).toMatchObject({ tenantId: "t", channel: "telegram", text: "gamarjoba" });
+    expect(d.chatDeps.handleTurn).toBe(handleTurn);
+    expect(d.archableBotDeps.runTurn).toBe(handleTurn);
     expect(await d.archableBotDeps.consume({} as never)).toEqual({ outcome: "unknown", change_request_id: null });
     expect(await d.archableBotDeps.ownerPress(1, "x")).toBeNull();
   });
