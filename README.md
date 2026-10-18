@@ -1,4 +1,4 @@
-# 🏛️ Archable — Self-Evolving Business Operating System
+# 🏛️ Archable — Self-Evolving Business Operating System Compiler
 
 > **Turn any real-world business into an autonomous, policy-guarded Operating System in 60 seconds.**
 
