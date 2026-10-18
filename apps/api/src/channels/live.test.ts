@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { HandleTurn, Inbound } from "@archable/runtime";
 import { channelDeps, liveChannelDeps } from "./live";
+import { createTelegramDelivery, TEXT_ONLY } from "./telegram/delivery";
 import { archableBotDeps as unwiredBot, chatDeps, webhookDeps, widgetDeps as unwiredWidget } from "./unwired";
 
 // A stand-in for DEV-2's channel store: records which functions the live deps call.
@@ -66,7 +67,7 @@ describe("live deps: wired only where ready end to end", () => {
     await d.webhookDeps.resolveBotHook("hook");
     await d.webhookDeps.firstSeen(1, 2);
     expect(calls).toEqual(["openSession", "resumeSession", "recentInbound", "existingReply", "outboundAfter", "resolveBotHook", "firstSeen"]);
-    expect(d.chatDeps.handleTurn).toBe(handleTurn);
+    expect(await d.chatDeps.handleTurn({ turnId: "u", tenantId: "t" } as Inbound)).toMatchObject({ turnId: "u", text: "ok" });
   });
 
   it("shares the runtime turn handler with web chat and tenant bot dispatch", async () => {
@@ -83,9 +84,37 @@ describe("live deps: wired only where ready end to end", () => {
     } } as never);
     expect(turns).toHaveLength(1);
     expect(turns[0]).toMatchObject({ tenantId: "t", channel: "telegram", text: "gamarjoba" });
-    expect(d.chatDeps.handleTurn).toBe(handleTurn);
-    expect(d.archableBotDeps.runTurn).toBe(handleTurn);
+    await d.chatDeps.handleTurn({ ...turns[0]!, channel: "web" });                  // the same engine, from each entry point
+    await d.archableBotDeps.runTurn({ ...turns[0]!, channel: "telegram_business" });
+    expect(turns.map((t) => t.channel)).toEqual(["telegram", "web", "telegram_business"]);
     expect(await d.archableBotDeps.consume({} as never)).toEqual({ outcome: "unknown", change_request_id: null });
     expect(await d.archableBotDeps.ownerPress(1, "x")).toBeNull();
+  });
+
+  it("Telegram replies leave through send.ts: the tenant bot's Vault token, a recorded reply; a voice note gets the text-only notice", async () => {
+    const sent: { token: string; chatId: number | string; text: string }[] = [];
+    const rows: unknown[] = [];
+    const telegram = createTelegramDelivery({
+      env: { ARCHABLE_BOT_TOKEN: "platform-token", VERCEL_ENV: "production" },
+      store: {
+        channelSecret: async (_t, name) => (name === "marani/tg_bot_token" ? "tenant-token" : null),
+        turnInbound: async () => ({ conversation_id: "conv", chapter_id: null, spec_digest: "sha256:aaa" }),
+        insertOutbound: async (_t, m) => { rows.push(m); return 77; },
+        pauseChannel: async () => {},
+        bundle: async () => ({ apps: { cc: { template: "t", agent: "cellar_master", channels: ["tg"] } }, channels: { tg: { kind: "telegram_bot" } } }) as never,
+      },
+      apiFor: ((token: string) => ({ sendMessage: async (chatId: number | string, text: string) => { sent.push({ token, chatId, text }); return { message_id: 5 }; } })) as never,
+      log: () => {},
+    });
+    // Like createHandleTurn: a Telegram target's reply goes out through the engine's deliver.
+    const handleTurn: HandleTurn = async (i) => ({ turnId: i.turnId, text: "Saperavi is 38 GEL.", allowed: true, paused: false,
+      outboundMessageId: await telegram.deliver(i.reply, "Saperavi is 38 GEL.", { suggestion: "Saperavi is 38 GEL." }) });
+    const d = liveChannelDeps(store().s, handleTurn, telegram);
+    const hook = { tenant_id: "t", channel_id: "c", bot_id: 1, hook_secret_hash: Buffer.alloc(32), token_secret: "marani/tg_bot_token" };
+    const message = { message_id: 42, date: 0, chat: { id: 555, type: "private", first_name: "Nino" }, from: { id: 555, is_bot: false, first_name: "Nino" } };
+    await d.webhookDeps.dispatchTenantUpdate(hook, { update_id: 1, message: { ...message, text: "saperavi?" } } as never);
+    await d.webhookDeps.dispatchTenantUpdate(hook, { update_id: 2, message: { ...message, voice: { file_id: "v", file_unique_id: "v", duration: 2 } } } as never);
+    expect(sent).toEqual([{ token: "tenant-token", chatId: 555, text: "Saperavi is 38 GEL." }, { token: "tenant-token", chatId: 555, text: TEXT_ONLY }]);
+    expect(rows).toEqual([expect.objectContaining({ conversationId: "conv", author: "agent:cellar_master", externalId: "5" })]);
   });
 });

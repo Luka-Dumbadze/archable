@@ -24,7 +24,8 @@ app.get("/healthz", (c) => c.json({ ok: true }));
 
 // DEV-1: customer channels: web chat, widget, tenant-bot webhooks, @ArchableBot, tenant CORS (plan §6.4).
 import { mountChannels } from "./channels/mount";
-const handleTurn = createTurnEngine();
+import { telegramDelivery } from "./channels/telegram/delivery";
+const handleTurn = createTurnEngine({ deliver: telegramDelivery().deliver });   // Telegram replies through send.ts
 mountChannels(app, process.env, handleTurn);
 
 // DEV-2: console turns (plan §5.6)
