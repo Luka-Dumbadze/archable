@@ -69,11 +69,13 @@ export function createChannelStore(db: { runtime: postgres.Sql; control: postgre
       });
     },
 
+    // Every message after `afterId`, the customer's own included: the chat page rebuilds its history from after=0
+    // (DEV-1, P3.D1.6). The name is ChatDeps'.
     outboundAfter(c: ChatClaims, afterId: number): Promise<ChatMessage[]> {
       return withTenant(runtime, c.tid, async (tx) => {
         const rows = await tx<{ id: string; author: string; body: string | null; created_at: Date }[]>`
           select id, author, body, created_at from public.messages
-           where tenant_id = ${c.tid} and conversation_id = ${c.cid} and direction = 'out' and id > ${afterId}
+           where tenant_id = ${c.tid} and conversation_id = ${c.cid} and id > ${afterId}
            order by id limit 50`;
         return rows.map(message);
       });

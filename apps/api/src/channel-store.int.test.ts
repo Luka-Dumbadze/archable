@@ -181,7 +181,10 @@ describe.skipIf(!live)('channel store against archable (D2–D4)', () => {
       expect(await store.recentInbound(c, 60)).toBe(1);
       const reply = await store.existingReply(c, clientMsgId);
       expect(reply).toMatchObject({ author: 'agent', text: '35.00 GEL' });
-      expect((await store.outboundAfter(c, 0)).map((m) => m.text)).toEqual(['35.00 GEL']);
+      // after=0 rebuilds the whole conversation, both sides, in order (P3.D1.6).
+      const all = await store.outboundAfter(c, 0);
+      expect(all.map((m) => [m.author, m.text])).toEqual([['customer', 'saperavi?'], ['agent', '35.00 GEL']]);
+      expect((await store.outboundAfter(c, all[0]!.id)).map((m) => m.text)).toEqual(['35.00 GEL']);
       expect(await store.outboundAfter(c, reply!.id)).toEqual([]);
     });
 
