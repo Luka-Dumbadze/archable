@@ -42,7 +42,9 @@ let dryTurn = 0;
 async function nextMessage(): Promise<string> {
   if (dry) { const m = dryTurn === 0 ? dry : dryAnswers[dryTurn - 1] ?? ''; dryTurn++; console.log(`[owner] ${m}\n`); return m; }
   for (;;) {
-    const ups = await tg<{ update_id: number; message?: { chat: { id: number }; text?: string } }[]>('getUpdates', { offset, timeout: 25, allowed_updates: ['message'] });
+    // A network blip while waiting for the owner is retried, not fatal.
+    const ups = await tg<{ update_id: number; message?: { chat: { id: number }; text?: string } }[]>('getUpdates', { offset, timeout: 25, allowed_updates: ['message'] })
+      .catch(async () => { await new Promise((r) => setTimeout(r, 3000)); return []; });
     for (const u of ups) {
       offset = u.update_id + 1;
       if (u.message?.chat.id === owner && u.message.text) return u.message.text.trim();
