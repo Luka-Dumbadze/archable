@@ -76,14 +76,16 @@ export function createExecutors(inTenant: InTenant, o: { deliver?: NotifyDeliver
   return {
     'catalog.search': (input, c) => inTenant(c.tenantId, async (tx) => {
       const { object } = catalogOf(c.bundle);
-      const q: string | null = typeof input.query === 'string' && input.query.trim() ? `%${input.query.trim()}%` : null;
+      // Each word of the query must appear somewhere in the item: "Samsung Galaxy A55" matches brand Samsung, label Galaxy A55.
+      const words = typeof input.query === 'string' ? input.query.trim().split(/\s+/).filter(Boolean) : [];
+      const q: string[] | null = words.length ? words.map((w) => `%${w.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`) : null;
       const maxPrice: number | null = typeof input.max_price === 'number' ? input.max_price : null;
       // Every other string input names a field of the catalog object (grape for wine, category for a shop): exact match.
       const exact = Object.entries(input).filter(([k, v]) => k !== 'query' && k !== 'max_price' && typeof v === 'string') as [string, string][];
       const rows: Row[] = await tx<Row[]>`
         select id, natural_key, attrs from public.records
          where tenant_id = ${c.tenantId} and env = ${c.env} and entity_type = ${object}
-           and (${q}::text is null or attrs::text ilike ${q} or natural_key ilike ${q})
+           and (${q}::text[] is null or attrs::text ilike all(${q}::text[]) or natural_key ilike all(${q}::text[]))
            and (${maxPrice}::bigint is null or (attrs ->> 'price')::bigint <= ${maxPrice})
          order by attrs ->> 'label' limit 50`;
       return { items: rows.filter((r) => exact.every(([k, v]) => r.attrs[k] === v)).slice(0, 10).map((r) => r.attrs) };
