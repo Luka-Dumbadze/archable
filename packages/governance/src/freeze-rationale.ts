@@ -1,14 +1,13 @@
 // packages/governance/src/freeze-rationale.ts: the card for a verified head, frozen into change_requests (plan §7.5).
 // Runs once per verified head, in the verify job, on the control plane. Every number comes from desire_impact.
-//
-// renderOps and labelsFrom are passed in: the plan names them but neither document defines their templates, and the
-// spec has no field or enum labels to read yet (PROGRESS.md Q7). Until that is settled the verify job supplies them.
+// Labels and op sentences come from summary.ts (PROGRESS.md Q7); the risk section shows one witness per rule.
 import type postgres from 'postgres';
 import type { Bundle } from '@archable/compiler';
 import type { ChangeSet } from '@archable/schema';
 import type { z } from 'zod';
 import { buildChangeRationale, rationaleDigest, type BlastReason, type ChangeRationaleInput, type DesireImpact,
-         type Labels, type VerificationResult } from './rationale';
+         type VerificationResult } from './rationale';
+import { labelsFrom, renderOps, witnesses } from './summary';
 
 type Tx = postgres.TransactionSql;
 
@@ -23,11 +22,6 @@ export interface VerifyRun {
   verification: VerificationResult;
 }
 
-export interface RationaleText {
-  renderOps(cs: z.infer<typeof ChangeSet>, bundle: Bundle): string[];   // the approval-summary templates (v3 §4.6)
-  labelsFrom(bundle: Bundle, base: Bundle): Labels;
-}
-
 // desire_impact's row as postgres.js returns it: bigint as a string, timestamptz as a Date.
 interface ImpactRow {
   chapters: number; customers: number; quoted: number; abandoned: number; abandoned_value: string | number;
@@ -39,15 +33,20 @@ const toImpact = (r: ImpactRow): DesireImpact => ({
   first_seen: r.first_seen ? r.first_seen.toISOString() : null, last_seen: r.last_seen ? r.last_seen.toISOString() : null,
 });
 
-export async function freezeRationale(tx: Tx, cr: ChangeRequest, run: VerifyRun, bundle: Bundle, base: Bundle, text: RationaleText) {
+/** The bounds of policies in Δ or bounding a tool reached in run mode: the card's caps. */
+export function boundsFor(bundle: Bundle, radius: Pick<VerifyRun['radius'], 'changed' | 'reached'>) {
+  const changedPolicies = new Set(radius.changed.filter((n) => n.startsWith('policy:')).map((n) => n.slice(7)));
+  const reachedTools = new Set(radius.reached.filter((k) => k.startsWith('run|tool:')).map((k) => k.slice(9)));
+  return bundle.policies.bounds.filter((b) => changedPolicies.has(b.policy) || reachedTools.has(b.action));
+}
+
+export async function freezeRationale(tx: Tx, cr: ChangeRequest, run: VerifyRun, bundle: Bundle, base: Bundle, lang = 'en') {
   const [impact] = await tx<ImpactRow[]>`select * from public.desire_impact(${cr.tenant_id}, ${cr.desire_id}, interval '2 hours')`;
-  const changedPolicies = new Set(run.radius.changed.filter((n) => n.startsWith('policy:')).map((n) => n.slice(7)));
-  const reachedTools = new Set(run.radius.reached.filter((k) => k.startsWith('run|tool:')).map((k) => k.slice(9)));
-  const bounds = bundle.policies.bounds.filter((b) => changedPolicies.has(b.policy) || reachedTools.has(b.action));
+  const bounds = boundsFor(bundle, run.radius);
   const card = buildChangeRationale({
     changeRequestId: cr.id, headSha: cr.head_sha, desire: run.desire, ...(run.ownerRequest ? { ownerRequest: run.ownerRequest } : {}),
-    impact: toImpact(impact!), quietHours: 2, reasons: run.radius.why, bounds, ops: text.renderOps(run.changeset, bundle),
-    verification: run.verification, labels: text.labelsFrom(bundle, base), now: new Date().toISOString(),
+    impact: toImpact(impact!), quietHours: 2, reasons: witnesses(run.radius), bounds, ops: renderOps(run.changeset.ops, bundle, lang),
+    verification: run.verification, labels: labelsFrom(bundle, base, lang), now: new Date().toISOString(),
   });
   await tx`update public.change_requests set rationale = ${tx.json(card as never)}, rationale_digest = ${rationaleDigest(card)}
            where tenant_id = ${cr.tenant_id} and id = ${cr.id}`;

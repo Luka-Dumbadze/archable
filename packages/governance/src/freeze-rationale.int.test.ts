@@ -6,19 +6,13 @@ import postgres from 'postgres';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { RationaleCard } from '@archable/contracts';
 import type { Bundle } from '@archable/compiler';
-import { freezeRationale, type RationaleText, type VerifyRun } from './freeze-rationale';
+import { freezeRationale, type VerifyRun } from './freeze-rationale';
 import { rationaleDigest, renderRationale } from './rationale';
 
 const live = Boolean(process.env.DATABASE_URL_CONTROL);
 const h = createHash('sha256').update('archable:tenant:marani').digest('hex');
 const MARANI = `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`;
 class Rollback extends Error {}
-
-const text: RationaleText = {
-  renderOps: (cs) => cs.ops.map((o) => `op ${o.op}`),
-  labelsFrom: (b) => ({ node: (id) => id, path: (p) => p, value: (_p, v) => String(v),
-                        isMoney: (p) => p === 'context.quote.total', currency: b.metadata.currency }),
-};
 
 describe.skipIf(!live)('freezeRationale against archable', () => {
   const control = postgres(process.env.DATABASE_URL_CONTROL!, { prepare: false, max: 1 });
@@ -58,10 +52,10 @@ describe.skipIf(!live)('freezeRationale against archable', () => {
         radius: { changed: ['field:order.payment'], reached: ['def|field:order.payment', 'run|tool:order.create'],
                   why: [{ tier: 3, rule: 'money', path: ['field:order.payment', 'tool:order.create'] }] },
         changeset: { desire: `D-${d!.number}`, base_digest: t!.active_digest, rationale: 'fixture',
-                     ops: [{ op: 'add_enum', path: 'objects.order.fields.payment.values', value: 'cod', label: 'Cash on delivery' }] },
+                     ops: [{ op: 'add_enum', path: 'objects.order.fields.payment', value: 'cod', label: 'cash on delivery' }] },
         verification: { suites: { smoke: { passes: 6, runs: 6 } }, new_cases: 1, elva_drift: 'none' },
       };
-      const card = await freezeRationale(tx, cr, run, bundle, bundle, text);
+      const card = await freezeRationale(tx, cr, run, bundle, bundle);
       const [stored] = await tx<{ rationale: RationaleCard; rationale_digest: string }[]>`
         select rationale, rationale_digest from public.change_requests where tenant_id = ${MARANI} and id = ${cr.id}`;
       seen = { card, stored: stored! };
@@ -78,8 +72,9 @@ describe.skipIf(!live)('freezeRationale against archable', () => {
     ]);
     // run|tool:order.create was reached, so its bounds from Marani's real policies are on the card.
     expect(card.risk.map((x) => x.source)).toEqual(expect.arrayContaining(['policy order.large_needs_staff', 'policy order.discount_cap']));
-    expect(card.risk.map((x) => x.text)).toContain("The context.quote.total can't exceed 300 GEL, unless an exception in that rule applies.");
+    expect(card.risk.map((x) => x.text)).toContain("The order total can't exceed 300 GEL, unless an exception in that rule applies.");
+    expect(card.action.map((x) => x.text)).toEqual(['Payment method can now be cash on delivery.']);
     expect(stored.rationale_digest).toBe(rationaleDigest(card));
     expect(rationaleDigest(stored.rationale)).toBe(rationaleDigest(card));        // the jsonb round trip keeps the digest
-  });
+  }, 30_000);                                                                      // a dozen round trips to eu-central-1
 });

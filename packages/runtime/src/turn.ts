@@ -9,7 +9,7 @@ import { agentFor, holdingReply, systemPrompt } from './agent';
 import type { ContextOptions, TurnContext } from './context';
 import type { Draft, Msg, Route, RouteInput, Signals } from './decisions';
 import { FAILED } from './decisions';
-import { draftOf } from './drafts';
+import { draftOf, termsEvidence } from './drafts';
 import type { Pin } from './epochs';
 import type { Conversation, Store } from './store';
 import type { Deliver, HandleTurn, Inbound } from './types';
@@ -26,6 +26,7 @@ export interface TurnDeps {
   languageModel(slug: string): LanguageModel;                   // 'google/gemini-3.8-flash' → a provider model (Q5)
   deliver: Deliver;                                             // Telegram: DEV-1's sender; web and console are recorded here
   generate?: typeof generateText;                               // tests inject a fake model loop
+  terms?(bundle: Bundle, agentId: string): string[];           // the bundle's business terms (Q10), part of the evidence
 }
 
 const rank = (scale: string[], level: string | undefined) => (level ? scale.indexOf(level) : -1);
@@ -46,6 +47,7 @@ export function createHandleTurn(d: TurnDeps): HandleTurn {
 
     const agentId = agentFor(bundle, inbound);
     const agent = bundle.agents[agentId]!;
+    const terms = d.terms?.(bundle, agentId) ?? [];                              // Q10: the agent's prompt and the evidence
     const locale = String((bundle.metadata.locale as { primary?: string } | null)?.primary ?? 'en');
     const tail = Number((agent.context as { conversation_tail?: number } | null)?.conversation_tail ?? 20);
     const [route, ctx] = await Promise.all([
@@ -72,7 +74,7 @@ export function createHandleTurn(d: TurnDeps): HandleTurn {
       },
       model: d.languageModel(lane.model),
       ...(lane.reasoning ? { reasoning: lane.reasoning as Reasoning } : {}),
-      system: systemPrompt(bundle, agentId, route, ctx),
+      system: systemPrompt(bundle, agentId, route, ctx, new Date(), terms),
       messages: ctx.messages,
       tools: gw.tools,
       stopWhen: stepCountIs(4),
@@ -83,7 +85,8 @@ export function createHandleTurn(d: TurnDeps): HandleTurn {
       await d.store.captureFailure(tenantId, turnId, 'deadline', 3, { stage: 'dialogue', error: String(result.error) }).catch(() => {});
     }
 
-    const draft = draftOf(bundle, result.text.trim(), gw.evidence(), { tenantId, turnId, inReplyTo: inbound.text });
+    const evidence = terms.length ? [...gw.evidence(), termsEvidence(pin.digest, terms)] : gw.evidence();
+    const draft = draftOf(bundle, result.text.trim(), evidence, { tenantId, turnId, inReplyTo: inbound.text });
     const signals = draft.text ? await d.decisions.preSend(bundle, draft) : FAILED;  // fails closed
     const verdict = gw.authorize('message.send', { payload_digest: draft.digest, signals });
     const text = verdict.allow ? draft.text : holdingReply(ctx.locale);
