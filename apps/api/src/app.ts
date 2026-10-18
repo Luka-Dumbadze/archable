@@ -2,7 +2,10 @@ import { randomUUID } from "node:crypto";
 import { githubApp } from "@archable/governance";
 import { Hono } from "hono";
 import { memberFromJwt } from "./auth";
-import { controlDb } from "./db";
+import { controlDb, runtimeDb } from "./db";
+import { bundleRoutes } from "./routes/bundles";
+import { manifestRoutes } from "./routes/manifest";
+import { createShellStore } from "./shell-store";
 import { registerGithubHandlers } from "./github-handlers";
 import { createArchitect } from "./architect-wiring";
 import { cronRoutes } from "./routes/cron";
@@ -17,6 +20,11 @@ app.get("/healthz", (c) => c.json({ ok: true }));
 
 // DEV-2: console turns (plan §5.6)
 app.route("/", turnRoutes({ memberFromJwt, handleTurn: createTurnEngine(), newTurnId: randomUUID }));
+
+// DEV-2: shell boot (v3 §2.4, plan §8.2): the manifest by origin, and a digest's UI projection for a member (P5.D2.1).
+const shell = createShellStore(runtimeDb);
+app.route("/", manifestRoutes(shell.manifest));
+app.route("/", bundleRoutes({ memberFromJwt, uiProjection: shell.uiProjection }));
 
 // DEV-2: the archable-architect App's webhook (plan §7.1). Mounted only when the App is configured; the
 // pull_request, pull_request_review and push handlers (ledger, card supersede) come with P4.D2.6 and P4.D2.7.
