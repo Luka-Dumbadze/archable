@@ -10,7 +10,9 @@ import { parseArgs } from 'node:util';
 import { App } from 'octokit';
 import { controlDb, withTenant } from '../apps/api/src/db';
 
-const { values } = parseArgs({ options: { tenant: { type: 'string', default: 'marani' }, org: { type: 'string', default: 'archable-tenants' } } });
+// --from: the fixture tree to provision from (default fixtures/<tenant>); scratch tenants reuse fixtures/marani.
+const { values } = parseArgs({ options: { tenant: { type: 'string', default: 'marani' }, org: { type: 'string', default: 'archable-tenants' },
+                                          from: { type: 'string' }, resync: { type: 'boolean', default: false } } });
 const slug = values.tenant!, org = values.org!;
 const appId = Number(process.env.GITHUB_APP_ID);
 if (!appId || !process.env.GITHUB_APP_PRIVATE_KEY) throw new Error('set GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY');
@@ -53,7 +55,7 @@ if (!repo) {
 } else step(`${repo.full_name} exists`);
 
 // 2. The tree: fixtures/<slug> as one commit on main, unless main already has exactly this tree.
-const root = `fixtures/${slug}`;
+const root = values.from ?? `fixtures/${slug}`;
 const walk = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : [join(d, f)]));
 const files = walk(root).map((p) => ({ path: relative(root, p).split(sep).join('/'), content: readFileSync(p, 'utf8').replace(/\r\n/g, '\n') }));
 const blobSha = (s: string) => { const b = Buffer.from(s, 'utf8'); return createHash('sha1').update(`blob ${b.length}\0`).update(b).digest('hex'); };
@@ -61,14 +63,37 @@ const ref = await gh.request('GET /repos/{owner}/{repo}/git/ref/{ref}', { owner:
 const headTree = (await gh.request('GET /repos/{owner}/{repo}/git/trees/{tree_sha}', { owner: org, repo: slug, tree_sha: ref.object.sha, recursive: '1' })).data;
 const have = new Map(headTree.tree.filter((e) => e.type === 'blob').map((e) => [e.path!, e.sha!]));
 const same = have.size === files.length && files.every((f) => have.get(f.path) === blobSha(f.content));
-if (!same) {
+const writeTree = async (parents: string[], message: string, force: boolean) => {
   const tree = (await gh.request('POST /repos/{owner}/{repo}/git/trees', { owner: org, repo: slug,
     tree: files.map((f) => ({ path: f.path, mode: '100644' as const, type: 'blob' as const, content: f.content })) })).data;
-  const commit = (await gh.request('POST /repos/{owner}/{repo}/git/commits', { owner: org, repo: slug, tree: tree.sha, parents: [],
-    message: `${slug}: initial tenant tree from fixtures/${slug}\n\nProvisioned by archable-architect (plan §7.1).` })).data;
-  await gh.request('PATCH /repos/{owner}/{repo}/git/refs/{ref}', { owner: org, repo: slug, ref: 'heads/main', sha: commit.sha, force: true });
-  step(`main = ${commit.sha.slice(0, 7)} (${files.length} files)`);
-} else step(`main already holds fixtures/${slug} (${files.length} files)`);
+  const commit = (await gh.request('POST /repos/{owner}/{repo}/git/commits', { owner: org, repo: slug, tree: tree.sha, parents, message })).data;
+  await gh.request('PATCH /repos/{owner}/{repo}/git/refs/{ref}', { owner: org, repo: slug, ref: 'heads/main', sha: commit.sha, force });
+  return commit.sha;
+};
+const existingRulesets = (await gh.request('GET /repos/{owner}/{repo}/rulesets', { owner: org, repo: slug })).data;
+const governed = existingRulesets.find((r) => r.name === 'archable-governance');
+if (same) step(`main already holds ${root} (${files.length} files)`);
+else if (!governed) {
+  // A new repository: the tree is its first commit (before the ruleset forbids writing main directly).
+  const sha = await writeTree([], `${slug}: initial tenant tree from ${root}\n\nProvisioned by archable-architect (plan §7.1).`, true);
+  step(`main = ${sha.slice(0, 7)} (${files.length} files)`);
+} else if (!values.resync) {
+  throw new Error(`main differs from ${root} and the repository is governed: changes go through a PR. A reference tenant can be ` +
+                  `re-synced with --resync, which disables the ruleset for one commit (record it in PROGRESS.md).`);
+} else {
+  // Reference-tenant resync: one commit on top of main (history kept, no force), the ruleset disabled only around it.
+  const id = governed.id;
+  await gh.request('PUT /repos/{owner}/{repo}/rulesets/{ruleset_id}', { owner: org, repo: slug, ruleset_id: id, enforcement: 'disabled' } as never);
+  step(`ruleset ${id} disabled for the resync`);
+  try {
+    const sha = await writeTree([ref.object.sha], `${slug}: resync with ${root}\n\nReference-tenant resync by archable-architect: the ruleset was ` +
+                                `disabled for this commit only (PROGRESS.md).`, false);
+    step(`main ${ref.object.sha.slice(0, 7)} → ${sha.slice(0, 7)} (${files.length} files)`);
+  } finally {
+    await gh.request('PUT /repos/{owner}/{repo}/rulesets/{ruleset_id}', { owner: org, repo: slug, ruleset_id: id, enforcement: 'active' } as never);
+    step(`ruleset ${id} active again`);
+  }
+}
 
 // 3. The ruleset (after the tree: it forbids force-pushes to main).
 const rulesets = (await gh.request('GET /repos/{owner}/{repo}/rulesets', { owner: org, repo: slug })).data;

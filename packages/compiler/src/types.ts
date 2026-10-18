@@ -1,8 +1,9 @@
 // The compiler's public types (plan §4.3).
-import type { A2AGraph, Effect, JsonSchema, WidgetConfig } from '@archable/contracts';
+import type { A2AGraph, Effect, JsonSchema, Tier, WidgetConfig } from '@archable/contracts';
 import type { ActionFacts } from './cedar-schema';
 import type { Digest } from './digest';
-import type { EdgeKind, GNode } from './graph/blast';
+import type { EdgeKind, GNode, RiskRules } from './graph/blast';
+import type { BundleLabels } from './labels';
 import type { PolicyBound } from './policy-bounds';
 
 export interface RepoTree { files: Record<string, string> }             // path → UTF-8 content; nothing else is read
@@ -26,10 +27,21 @@ export interface Bundle {
   apps: Record<string, { template: string; agent: string | null; channels: string[] }>;   // which agent serves which channel
   params: Record<string, unknown>;                                      // apps.*.params, flattened: 'quickshipper.express.surcharge'
   ui: unknown;                                                          // v3 §2.4 UI projection
+  risk: RiskRules;                                                      // spec.risk with numeric tiers, for blastRadius
+  governance: Governance;                                               // spec.governance with numeric tiers (cards, settle)
+  labels: BundleLabels;                                                 // Q7: node, enum value and context-path labels
   graph: { nodes: GNode[]; edges: { from: string; to: string; kind: EdgeKind }[] };
   a2a: A2AGraph;
   evals: unknown;
   extension_digest: string | null;
+}
+
+export interface Governance {
+  approvals: Record<string, string[]>;                                  // 'T3' → ['developer', 'owner+step_up']
+  delegation: { to: string; upTo: Tier };
+  cardTtlHours: Partial<Record<Tier, number>>;                          // 3 → 24
+  previewRequiredFrom: Tier;
+  architect: { maxOpenPrs: number; maxPatchAttempts: number };
 }
 
 // The rows registration writes per digest (v3 §8): columns of entity_schemas and apps.

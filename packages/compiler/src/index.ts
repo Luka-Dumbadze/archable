@@ -12,11 +12,13 @@ import type { Bundle, CompileResult, Lock, RepoTree } from './types';
 export type { Digest } from './digest';
 export { digestOf } from './digest';
 export { CompileError, CompileFailure } from './errors';
-export type { EdgeKind, GEdge, GNode } from './graph/blast';
+export type { BlastRadius, EdgeKind, FieldFacets, GEdge, GNode, GraphData, Reason, RiskRules } from './graph/blast';
+export { blastRadius, changeKind } from './graph/blast';
+export type { BundleLabels, Localized } from './labels';
 export type { ActionFacts, FactLoad } from './cedar-schema';
 export type { PolicyBound } from './policy-bounds';
 export { boundsOf } from './policy-bounds';
-export type { Bundle, CompileResult, Lock, Projections, RepoTree } from './types';
+export type { Bundle, CompileResult, Governance, Lock, Projections, RepoTree } from './types';
 
 export function compile(tree: RepoTree, lock: Lock): CompileResult {
   const errors = new Errors();

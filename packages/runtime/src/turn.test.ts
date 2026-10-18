@@ -54,7 +54,7 @@ const noDb: InTenant = async (_t, fn) => {
   return fn(tx);
 };
 
-function engine(o: { generate?: TurnDeps['generate']; preSend?: (d: Draft) => Signals; paused?: boolean } = {}) {
+function engine(o: { generate?: TurnDeps['generate']; preSend?: (d: Draft) => Signals; paused?: boolean; terms?: TurnDeps['terms'] } = {}) {
   const mem = memoryStore({ paused: o.paused });
   const calls = { generate: 0, route: 0, preSend: [] as Draft[], handoff: 0 };
   const gateway: GatewayDeps = {
@@ -80,6 +80,7 @@ function engine(o: { generate?: TurnDeps['generate']; preSend?: (d: Draft) => Si
     gateway,
     languageModel: () => ({}) as never,
     deliver: async () => { throw new Error('console replies are not delivered'); },
+    ...(o.terms ? { terms: o.terms } : {}),
     generate: o.generate ?? ((async () => { calls.generate++; return { text: 'Marani Saperavi 2021 is 35.00 GEL.' }; }) as never),
   });
   return { handleTurn, calls, ...mem };
@@ -147,6 +148,29 @@ describe('handleTurn (plan §5.4)', () => {
     // catalog.search has no executor in this fake: the gateway answers tool_unavailable and records no evidence.
     await e.handleTurn(inbound());
     expect(seen!.evidence).toEqual([]);
+  });
+
+  it('the bundle’s business terms are in the agent’s prompt and are evidence for the pre-send check (Q10)', async () => {
+    let seen: Draft | undefined;
+    let system = '';
+    const asked: string[] = [];
+    const e = engine({ terms: (_b, agent) => { asked.push(agent); return ['Payment method: card payment link or cash on delivery.']; },
+                       generate: (async (o: { system: string }) => { system = o.system; return { text: 'Yes, cash on delivery works.' }; }) as never,
+                       preSend: (d) => { seen = d; return pass(d); } });
+    await e.handleTurn(inbound());
+    expect(asked).toEqual(['cellar_master']);                                      // once: prompt and evidence share it
+    expect(seen!.evidence).toEqual([{ tool: 'business.terms', input: { bundle: expect.stringMatching(/^sha256:/) },
+      output: { terms: ['Payment method: card payment link or cash on delivery.'] } }]);
+    expect(system).toContain('that a tool returned in this conversation or that the business terms below state');
+    expect(system).toContain('Business terms:\n- Payment method: card payment link or cash on delivery.');
+  });
+
+  it('without terms the prompt keeps the tool-only rule', async () => {
+    let system = '';
+    const e = engine({ generate: (async (o: { system: string }) => { system = o.system; return { text: 'ok' }; }) as never });
+    await e.handleTurn(inbound());
+    expect(system).toContain('policies that a tool returned in this conversation. Never promise');
+    expect(system).not.toContain('Business terms');
   });
 });
 

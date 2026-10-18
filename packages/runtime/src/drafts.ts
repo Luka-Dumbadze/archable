@@ -26,6 +26,15 @@ export function displayMoney(value: unknown, schema: Schema | null | undefined):
 
 export interface Evidence { tool: string; input: Record<string, unknown>; output: Record<string, unknown> }
 
+/**
+ * The pinned bundle's business terms as one evidence item (PROGRESS.md Q10, a deviation from plan §5.4's tool-results-only
+ * evidence): the options and caps the bundle itself enforces, rendered deterministically, so a reply that states them
+ * is grounded and a reply that invents a rule still isn't. `business.terms` is not a tool the model can call.
+ */
+export const TERMS_EVIDENCE = 'business.terms';
+export const termsEvidence = (digest: string, terms: string[]): Evidence =>
+  ({ tool: TERMS_EVIDENCE, input: { bundle: digest }, output: { terms } });
+
 export function draftOf(bundle: Bundle, text: string, evidence: Evidence[], turn: { tenantId: string; turnId: string; inReplyTo: string }): Draft {
   return {
     tenantId: turn.tenantId,

@@ -1,0 +1,94 @@
+// scripts/architect-dry.ts: the Architect loop without GitHub (plan §7.8).
+//   pnpm tsx scripts/architect-dry.ts --tenant marani --say "customers want to pay the courier in cash, up to 300 lari" [--keep]
+// Owner text → desire (intake) → failing eval case (reproduce) → ChangeSet (patch) → compile → blast radius → evals in
+// the preview environment pr-0 → rationale card. Nothing is pushed. Afterwards the eval rows, the candidate bundles
+// and (without --keep) the desire are deleted.
+import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
+import { parseArgs } from 'node:util';
+import YAML from 'yaml';
+import { compile, type Bundle } from '@archable/compiler';
+import { typesafeDecisionModel } from '../packages/runtime/src/index';
+import { controlDb, runtimeDb, withTenant } from '../apps/api/src/db';
+import { createLanguageModels, createTurnEngine } from '../apps/api/src/turn-wiring';
+import { desireStore, draftChange, intake, type Lane } from '../packages/architect/src/index';
+import { boundsFor, buildChangeRationale, labelsFrom, rationaleDigest, renderOps, renderRationale, witnesses } from '../packages/governance/src/index';
+
+const { values } = parseArgs({ options: { tenant: { type: 'string', default: 'marani' }, say: { type: 'string' }, keep: { type: 'boolean', default: false } } });
+const slug = values.tenant!, text = values.say;
+if (!text) throw new Error('--say "<what the owner asks for>" is required');
+if (!process.env.TYPESAFE_API_KEY) throw new Error('set TYPESAFE_API_KEY (Jev decides intake and judges the evals)');
+
+const out = (s: string) => console.log(s);
+const ROOT = `fixtures/${slug}`;
+const walk = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : [join(d, f)]));
+const files = Object.fromEntries(walk(ROOT).map((p) => [relative(ROOT, p).split(sep).join('/'), readFileSync(p, 'utf8').replace(/\r\n/g, '\n')]));
+const lock = YAML.parse(files['archable.lock']!);
+const base = compile({ files }, lock);
+const h = createHash('sha256').update(`archable:tenant:${slug}`).digest('hex');
+const tenantId = `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`;
+
+const [t] = await withTenant(controlDb, tenantId, (tx) => tx<{ active_digest: string | null }[]>`select active_digest from public.tenants where id = ${tenantId}`);
+if (!t || t.active_digest !== base.digest) {
+  throw new Error(`${ROOT} compiles to ${base.digest}, but ${slug}'s active bundle is ${t?.active_digest ?? 'none'}: run scripts/seed-marani.ts first`);
+}
+
+const models = createLanguageModels();
+const jev = typesafeDecisionModel({ apiKey: process.env.TYPESAFE_API_KEY });
+const laneOf = (l: Bundle['models'][keyof Bundle['models']]): Lane => ({ model: models(l.model), ...(l.reasoning ? { reasoning: l.reasoning } : {}) });
+const store = desireStore(controlDb);
+const env = 'pr-0' as const;                                     // the dry run's eval environment: no PR, no desire-numbered env
+// 1. Intake.
+const at = new Date().toISOString();
+const r = await intake({ jev, lane: laneOf(base.bundle.models.dialogue), store }, { tenantId, text, at });
+if (r.outcome === 'not_a_change') {
+  out(`→ not a change request: ${r.intent} (p ${r.p.toFixed(2)})`);
+  await controlDb.end(); await runtimeDb.end();
+  process.exit(0);
+}
+const d = r.desire;
+out(`→ D-${d.number} ${r.outcome} · “${d.statement}” (intent change, p ${r.p.toFixed(2)})`);
+const brief = { number: d.number, statement: d.statement, evidence: [`owner, ${at}: ${text}`] };
+
+try {
+  // 2–3. Reproduce, patch, compile, verify: the same code as the cron's draft job (packages/architect/src/draft.ts).
+  const result = await draftChange({ control: controlDb, models, jev, engine: (pinned, observe) => createTurnEngine({ pinned, observe }),
+                                     log: (event, data) => console.error(JSON.stringify({ event, ...data })) },
+    { tenantId, desire: brief, base: { files, lock, compiled: base, gitSha: 'dry-run' }, env });
+  out(`→ ${result.failing.id}: ${result.failing.case.turns.map((x) => `“${x.customer}”`).join(' / ')}`);
+  if (result.outcome === 'no_gap') {
+    out('→ the case passes on the active bundle: no spec gap. The desire goes to the developer as an observation.');
+  } else if (result.outcome === 'to_developer') {
+    out(`→ ${result.attempts} attempts failed; the desire goes to the developer with the failing case.`);
+    for (const f of result.feedback) out(`  ${f.replace(/\n/g, '\n    ')}`);   // what the developer receives
+  } else {
+    out(`→ reproduced: fails on the active bundle (${result.baseFailures.join('; ')})`);
+    const { changeset: cs, head, radius, verification: v } = result;
+    const suites = Object.values(v.suites);
+    const passes = suites.reduce((a, s) => a + s.passes, 0), runs = suites.reduce((a, s) => a + s.runs, 0);
+    const floors = [...new Set(witnesses(radius).map((x) => x.rule).filter((x) => x in base.bundle.risk.floors))];
+    out(`→ D-${d.number} · ChangeSet (${cs.ops.length} ops) · compile ok · tier T${radius.tier} (${floors.join(', ')}) · `
+      + `fail-to-pass ${v.failToPass ? '✓' : '✗'} · ${passes}/${runs}`);
+    for (const op of cs.ops) out(`    ${op.op} ${'path' in op ? op.path : 'id' in op ? op.id : 'agent' in op ? op.agent : 'object' in op ? `${op.object}.${op.field}` : ''}`);
+    for (const [name, s] of Object.entries(v.suites)) out(`    ${name}: ${s.passes}/${s.runs}${s.gate === 'all_pass' ? '' : ` (Wilson ${s.wilson_lb})`}`);
+    for (const n of v.notRun) out(`    not run: ${n}`);
+
+    // 4. The rationale card for this head (plan §7.5), from the same facts the verify job would freeze.
+    const [row] = await withTenant(controlDb, tenantId, (tx) => tx<{ chapters: number; customers: number; quoted: number; abandoned: number;
+      abandoned_value: string; ordered: number; first_seen: Date | null; last_seen: Date | null }[]>`
+      select * from public.desire_impact(${tenantId}, ${d.id}, interval '2 hours')`);
+    const card = buildChangeRationale({
+      changeRequestId: 'dry-run', desire: { number: d.number, source: d.source, statement: d.statement }, ownerRequest: { at, text },
+      headSha: 'dry-run', quietHours: 2, reasons: witnesses(radius), bounds: boundsFor(head.bundle, radius), ops: renderOps(cs.ops, head.bundle),
+      impact: { ...row!, abandoned_value: Number(row!.abandoned_value), first_seen: row!.first_seen?.toISOString() ?? null, last_seen: row!.last_seen?.toISOString() ?? null },
+      verification: { suites: Object.fromEntries(Object.entries(v.suites).map(([k, s]) => [k, { passes: s.passes, runs: s.runs }])), new_cases: v.new_cases, elva_drift: v.elva_drift },
+      labels: labelsFrom(head.bundle, base.bundle), now: new Date().toISOString(),
+    });
+    out(`\n${renderRationale(card)}\n\nrationale digest ${rationaleDigest(card)} · head bundle ${head.digest} · nothing pushed`);
+  }
+} finally {
+  if (!values.keep && r.outcome === 'opened') await store.remove(tenantId, d.id);
+  await controlDb.end();
+  await runtimeDb.end();
+}

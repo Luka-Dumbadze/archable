@@ -208,6 +208,9 @@ importers:
       '@ai-sdk/openai':
         specifier: 4.0.96
         version: 4.0.96(zod@4.6.7)
+      '@archable/architect':
+        specifier: workspace:*
+        version: link:../../packages/architect
       '@archable/compiler':
         specifier: workspace:*
         version: link:../../packages/compiler
@@ -258,7 +261,44 @@ importers:
         specifier: 4.23.15
         version: 4.23.15
 
-  packages/architect: {}
+  packages/architect:
+    dependencies:
+      '@ai-sdk/provider':
+        specifier: 4.0.29
+        version: 4.0.29
+      '@archable/compiler':
+        specifier: workspace:*
+        version: link:../compiler
+      '@archable/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@archable/governance':
+        specifier: workspace:*
+        version: link:../governance
+      '@archable/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@archable/schema':
+        specifier: workspace:*
+        version: link:../schema
+      '@archable/spec-writer':
+        specifier: workspace:*
+        version: link:../spec-writer
+      ai:
+        specifier: 7.0.143
+        version: 7.0.143(zod@4.6.7)
+      octokit:
+        specifier: 5.0.5
+        version: 5.0.5
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
+      yaml:
+        specifier: 2.9.1
+        version: 2.9.1
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
 
   packages/compiler:
     dependencies:
@@ -325,6 +365,9 @@ importers:
       postgres:
         specifier: 3.4.9
         version: 3.4.9
+      yaml:
+        specifier: 2.9.1
+        version: 2.9.1
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -370,7 +413,21 @@ importers:
         specifier: 2.9.1
         version: 2.9.1
 
-  packages/spec-writer: {}
+  packages/spec-writer:
+    dependencies:
+      '@archable/schema':
+        specifier: workspace:*
+        version: link:../schema
+      yaml:
+        specifier: 2.9.1
+        version: 2.9.1
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@archable/compiler':
+        specifier: workspace:*
+        version: link:../compiler
 
 packages:
 

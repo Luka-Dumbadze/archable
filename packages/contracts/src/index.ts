@@ -117,6 +117,23 @@ export interface Manifest {
   topic: string;                     // 'tenant:<id>'
 }
 
+// GET /v1/bundles/:digest/ui (v3 §2.4): what the shell renders for one digest, cached forever (a digest never changes
+// meaning). The bundle's ui section itself (theme, nav, views, extensions: DEV-1's spec reads bundle.ui), and beside it
+// the per-digest projections (v3 §8 apps, entity_schemas) and the labels (Q7); never personas, policies or prompts.
+export interface BundleUi {
+  theme: { brand: string; radius: string; font: string };
+  nav: string[];
+  views: Record<string, { app: string; kind: 'chapters' | 'board' | 'list' | 'table'; object?: string; group_by?: string;
+                          card?: string[]; columns?: string[]; filters?: string[] }>;
+  extensions?: { slot: string; component: string }[];
+}
+export interface UiProjection extends BundleUi {
+  digest: string;
+  apps: { app_id: string; title: string; template: string; agent_id: string | null; nav_order: number }[];
+  objects: Record<string, { schema: JsonSchema; key: string | null; title: string; edit_roles: string[]; field_acl: Record<string, string[]> }>;
+  labels: { nodes: Record<string, Record<string, string>>; values: Record<string, Record<string, string>> };
+}
+
 // ── Owner conversation (plan §8.4 addition): what a button is, so the web and Telegram render the same choices ──
 
 export type OwnerButton =

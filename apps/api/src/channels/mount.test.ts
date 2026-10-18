@@ -36,7 +36,7 @@ describe("app.ts: customer channels mounted (plan §6.7 step 3)", () => {
     customDomains.delete("os.marani.ge");
   });
 
-  it("CORS: the shell's plain GET of the UI projection carries the header too (Q8)", async () => {
+  it("CORS: the shell's plain GET of the UI projection carries the header too (Q12)", async () => {
     const get = (origin: string) => app.request("/v1/bundles/sha256:abc/ui", { headers: { Origin: origin } });
     expect((await get("https://marani.archable.run")).headers.get("access-control-allow-origin")).toBe("https://marani.archable.run");
     expect((await get("https://evil.example")).headers.get("access-control-allow-origin")).toBeNull();
