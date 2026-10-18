@@ -73,10 +73,19 @@ if (!same) {
 // 3. The ruleset (after the tree: it forbids force-pushes to main).
 const rulesets = (await gh.request('GET /repos/{owner}/{repo}/rulesets', { owner: org, repo: slug })).data;
 const existing = rulesets.find((r) => r.name === RULESET.name);
-const saved = existing
-  ? (await gh.request('PUT /repos/{owner}/{repo}/rulesets/{ruleset_id}', { owner: org, repo: slug, ruleset_id: existing.id, ...RULESET } as never)).data
-  : (await gh.request('POST /repos/{owner}/{repo}/rulesets', { owner: org, repo: slug, ...RULESET } as never)).data;
-step(`ruleset ${(saved as { name: string; id: number }).name} (${(saved as { id: number }).id}) ${existing ? 'updated' : 'created'}`);
+const current = existing && (await gh.request('GET /repos/{owner}/{repo}/rulesets/{ruleset_id}', { owner: org, repo: slug, ruleset_id: existing.id })).data;
+// GitHub returns its defaults too (allowed_merge_methods, …), so compare only what RULESET specifies.
+const covers = (have: unknown, want: unknown): boolean =>
+  Array.isArray(want) ? Array.isArray(have) && have.length === want.length && want.every((w, i) => covers(have[i], w))
+  : want && typeof want === 'object' ? !!have && typeof have === 'object' && Object.entries(want).every(([k, v]) => covers((have as Record<string, unknown>)[k], v))
+  : have === want;
+if (current && covers(current, RULESET)) step(`ruleset ${RULESET.name} (${existing!.id}) already as specified`);
+else {
+  const saved = existing
+    ? (await gh.request('PUT /repos/{owner}/{repo}/rulesets/{ruleset_id}', { owner: org, repo: slug, ruleset_id: existing.id, ...RULESET } as never)).data
+    : (await gh.request('POST /repos/{owner}/{repo}/rulesets', { owner: org, repo: slug, ...RULESET } as never)).data;
+  step(`ruleset ${(saved as { name: string; id: number }).name} (${(saved as { id: number }).id}) ${existing ? 'updated' : 'created'}`);
+}
 
 // 4. The tenant row (the control plane derives the tenant id from the slug, as the seed does).
 const h = createHash('sha256').update(`archable:tenant:${slug}`).digest('hex');
