@@ -72,6 +72,12 @@ async function restore() {
 process.on('SIGINT', restore);
 process.on('SIGTERM', restore);
 
+// Before anything changes: a second demo (or a dev API) on :8787 would share @ArchableBot with this one.
+if (await fetch(`${LOCAL}/v1/manifest`).then(() => true, () => false)) {
+  console.error('[demo] another demo or API is already running on :8787. Press Ctrl+C in its window (or close it and run with --restore), then start again.');
+  process.exit(1);
+}
+
 // ── 1. Reset ──
 const state: { slugs: string[] } = existsSync(STATE) ? JSON.parse(readFileSync(STATE, 'utf8')) : { slugs: [] };
 for (const slug of state.slugs) {
@@ -101,7 +107,6 @@ if (values['clear-chat']) {
 }
 
 // ── 2. The API, then onboarding ──
-if (await fetch(`${LOCAL}/v1/manifest`).then(() => true, () => false)) throw new Error('something already listens on :8787; stop it first');
 const apiLog = createWriteStream(join(DIR, 'api.log'));
 api = spawn(process.execPath, ['--import', 'tsx', 'apps/api/src/dev.ts'], { env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
 api.stdout!.pipe(apiLog); api.stderr!.pipe(apiLog);
