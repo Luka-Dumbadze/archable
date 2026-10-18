@@ -115,9 +115,11 @@ try {
   }
   discount = Math.max(0, Math.min(90, Math.round(discount))); large = Math.max(1, Math.round(large));
 
-  let slug = (p.short_name || p.business_name).toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'shop';
+  const base = (p.short_name || p.business_name).toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 20) || 'shop';
+  // The first name whose repository doesn't exist yet (a repo the App made can't be deleted by it).
   const repoExists = async (s: string) => (await fetch(`https://api.github.com/repos/archable-tenants/${s}`)).status === 200;
-  if (await repoExists(slug)) slug = `${slug}-ge`;
+  let slug = base;
+  for (const s of [base, `${base}-ge`, `${base}-tbilisi`, `${base}-shop`, `${base}-${Date.now() % 1000}`]) { slug = s; if (!(await repoExists(s))) break; }
   const os = `${p.short_name} OS`;
   const files: Record<string, string> = {};
   const pr = await progress(`Building ${os} for ${p.business_name}`);
