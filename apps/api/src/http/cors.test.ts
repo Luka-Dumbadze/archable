@@ -21,12 +21,18 @@ describe("tenantCors", () => {
     expect(r.headers.get("access-control-allow-credentials")).toBeNull();
   });
 
+  it.each(["https://archable.lovable.app", "http://localhost:5173"])("echoes shared frontend origin %s", async (origin) => {
+    const r = await preflight(origin);
+    expect(r.headers.get("access-control-allow-origin")).toBe(origin);
+    expect(r.headers.get("access-control-allow-credentials")).toBeNull();
+  });
+
   it("echoes a registered custom domain", async () => {
     const r = await preflight("https://os.marani.ge");
     expect(r.headers.get("access-control-allow-origin")).toBe("https://os.marani.ge");
   });
 
-  it.each(["https://evil.com", "https://marani.ge", "https://api.archable.run", "null"])("refuses %s", async (evil) => {
+  it.each(["https://evil.com", "https://archable.lovable.app.evil.com", "https://marani.ge", "https://api.archable.run", "null"])("refuses %s", async (evil) => {
     const r = await preflight(evil);
     expect(r.headers.get("access-control-allow-origin")).toBeNull();
   });

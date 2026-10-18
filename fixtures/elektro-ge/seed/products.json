@@ -1,0 +1,74 @@
+[
+  {
+    "sku": "SAMS-001",
+    "label": "Galaxy A15 128GB",
+    "category": "smartphones",
+    "brand": "Samsung",
+    "warranty_months": 12,
+    "price": 59900,
+    "stock": 8
+  },
+  {
+    "sku": "XIAO-002",
+    "label": "Redmi Note 13 128GB",
+    "category": "smartphones",
+    "brand": "Xiaomi",
+    "warranty_months": 12,
+    "price": 64900,
+    "stock": 6
+  },
+  {
+    "sku": "LENO-003",
+    "label": "IdeaPad Slim 3 15.6-inch",
+    "category": "laptops",
+    "brand": "Lenovo",
+    "warranty_months": 12,
+    "price": 149900,
+    "stock": 3
+  },
+  {
+    "sku": "SONY-004",
+    "label": "Bluetooth Headphones WH-CH520",
+    "category": "audio",
+    "brand": "Sony",
+    "warranty_months": 12,
+    "price": 14900,
+    "stock": 7
+  },
+  {
+    "sku": "JBL-005",
+    "label": "Portable Bluetooth Speaker",
+    "category": "audio",
+    "brand": "JBL",
+    "warranty_months": 12,
+    "price": 17900,
+    "stock": 5
+  },
+  {
+    "sku": "ANKE-006",
+    "label": "20W USB-C Charger",
+    "category": "accessories",
+    "brand": "Anker",
+    "warranty_months": 6,
+    "price": 5900,
+    "stock": 15
+  },
+  {
+    "sku": "XIAO-007",
+    "label": "Mi Smart Band 8",
+    "category": "accessories",
+    "brand": "Xiaomi",
+    "warranty_months": 12,
+    "price": 12900,
+    "stock": 8
+  },
+  {
+    "sku": "XIAO-008",
+    "label": "Air Fryer 3.5L",
+    "category": "small_appliances",
+    "brand": "Xiaomi",
+    "warranty_months": 12,
+    "price": 29900,
+    "stock": 4
+  }
+]

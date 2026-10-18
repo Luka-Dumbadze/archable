@@ -8,7 +8,7 @@ import type { HandleTurn } from '@archable/runtime';
 export interface Member { tenantId: string; membershipId: string; role: 'owner' | 'developer' | 'staff' }
 
 export interface TurnDeps {
-  memberFromJwt(authorization: string | undefined, origin: string | undefined): Promise<Member | null>;   // Supabase JWT via JWKS
+  memberFromJwt(authorization: string | undefined, origin: string | undefined, requestUrl?: string | URL): Promise<Member | null>;   // Supabase JWT via JWKS
   handleTurn: HandleTurn;
   newTurnId(): string;
 }
@@ -22,7 +22,7 @@ const Body = z.object({
 export function turnRoutes(d: TurnDeps) {
   const app = new Hono<{ Variables: { member: Member } }>();
   app.use('/v1/turns', async (c, next) => {
-    const m = await d.memberFromJwt(c.req.header('authorization'), c.req.header('origin'));
+    const m = await d.memberFromJwt(c.req.header('authorization'), c.req.header('origin'), c.req.url);
     if (!m) return c.json({ error: 'unauthorized' }, 401);
     c.set('member', m);
     await next();

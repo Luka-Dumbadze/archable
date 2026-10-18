@@ -6,7 +6,7 @@ import { Hono } from 'hono';
 import type { Member } from './turn';
 
 export interface BundleDeps {
-  memberFromJwt(authorization: string | undefined, origin: string | undefined): Promise<Member | null>;
+  memberFromJwt(authorization: string | undefined, origin: string | undefined, requestUrl?: string | URL): Promise<Member | null>;
   uiProjection(tenantId: string, digest: string): Promise<UiProjection | null>;
 }
 
@@ -17,7 +17,7 @@ export function bundleRoutes(d: BundleDeps) {
   routes.get('/v1/bundles/:digest/ui', async (c) => {
     const digest = c.req.param('digest');
     if (!DIGEST.test(digest)) return c.json({ error: 'bad_digest' }, 400);
-    const m = await d.memberFromJwt(c.req.header('authorization'), c.req.header('origin'));
+    const m = await d.memberFromJwt(c.req.header('authorization'), c.req.header('origin'), c.req.url);
     if (!m) return c.json({ error: 'unauthorized' }, 401);
     const p = await d.uiProjection(m.tenantId, digest);
     if (!p) return c.json({ error: 'not_found' }, 404);

@@ -11,7 +11,7 @@ import { createDevStore } from "./devmode-store";
 import { desireRoutes } from "./routes/desires";
 import { createDesireStore } from "./desire-store";
 import { registerGithubHandlers } from "./github-handlers";
-import { sharedArchitect } from "./architect-wiring";
+import { sharedArchitect, telegramOwnerDeps } from "./architect-wiring";
 import { cronRoutes } from "./routes/cron";
 import { githubWebhookRoutes } from "./routes/github";
 import { turnRoutes } from "./routes/turn";
@@ -27,10 +27,12 @@ app.get("/healthz", (c) => c.json({ ok: true }));
 
 // DEV-1: customer channels: web chat, widget, tenant-bot webhooks, @ArchableBot, tenant CORS (plan §6.4).
 import { mountChannels } from "./channels/mount";
-mountChannels(app);
+import { telegramDelivery } from "./channels/telegram/delivery";
+const handleTurn = createTurnEngine({ deliver: telegramDelivery().deliver });   // Telegram replies through send.ts
+mountChannels(app, process.env, handleTurn);
 
 // DEV-2: console turns (plan §5.6)
-app.route("/", turnRoutes({ memberFromJwt, handleTurn: createTurnEngine(), newTurnId: randomUUID }));
+app.route("/", turnRoutes({ memberFromJwt, handleTurn, newTurnId: randomUUID }));
 
 // DEV-2: shell boot (v3 §2.4, plan §8.2): the manifest by origin, and a digest's UI projection for a member (P5.D2.1).
 const shell = createShellStore(runtimeDb);
@@ -54,7 +56,8 @@ if (process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY && githubWeb
     github.webhooks.on(name, ({ id }) => log(`github.${name}`, { delivery: id }));
   }
   // DEV-2: the Architect's queues, drained by Vercel Cron and kicked by enqueuers (P4.D2.8). Needs Jev (TYPESAFE_API_KEY).
-  const architect = process.env.TYPESAFE_API_KEY ? sharedArchitect({ app: github, log }) : null;
+  const architect = process.env.TYPESAFE_API_KEY
+    ? sharedArchitect({ app: github, log, ...(process.env.ARCHABLE_BOT_TOKEN ? telegramOwnerDeps(process.env.ARCHABLE_BOT_TOKEN) : {}) }) : null;
   registerGithubHandlers(github, { control: controlDb, log, ...(architect ? { kick: architect.kick } : {}) });   // P4.D2.7
   app.route("/", githubWebhookRoutes({ app: github, log }));
   if (architect) app.route("/", cronRoutes({ secret: process.env.CRON_SECRET, drain: architect.drain }));

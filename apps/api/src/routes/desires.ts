@@ -8,7 +8,7 @@ import { Hono, type MiddlewareHandler } from 'hono';
 import type { Member } from './turn';
 
 export interface DesireDeps {
-  memberFromJwt(authorization: string | undefined, origin: string | undefined): Promise<Member | null>;
+  memberFromJwt(authorization: string | undefined, origin: string | undefined, requestUrl?: string | URL): Promise<Member | null>;
   list(tenantId: string): Promise<DesireView[]>;
   unlink(tenantId: string, desireId: string, chapterId: string, role: 'owner' | 'developer'): Promise<DesireView | null>;
 }
@@ -19,7 +19,7 @@ export function desireRoutes(d: DesireDeps) {
   type E = { Variables: { member: Member } };
   const app = new Hono<E>();
   const auth: MiddlewareHandler<E> = async (c, next) => {
-    const m = await d.memberFromJwt(c.req.header('authorization'), c.req.header('origin'));
+    const m = await d.memberFromJwt(c.req.header('authorization'), c.req.header('origin'), c.req.url);
     if (!m || m.role === 'staff') return c.json({ error: 'forbidden' }, 403);
     c.set('member', m);
     await next();

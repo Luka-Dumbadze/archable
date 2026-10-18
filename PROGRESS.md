@@ -193,6 +193,8 @@ A handshake is a PR from both branches into `main`, titled `H<n>: …`, merged o
 
 - **Q12 (DEV-1, 18 Oct): `/v1/bundles/*` needs `tenantCors`.** The shell fetches `/v1/bundles/:digest/ui` from the tenant origin, so without CORS the fetch fails cross-origin. Proposal: apply `tenantCors` to `/v1/bundles/*` in `apps/api/src/channels/mount.ts`. → **decision (18 Oct): accepted.** DEV-1: LD; DEV-2 to initial: __
 
+- **Q13 (DEV-1, 18 Oct): Support `?biz=<slug>` / `?tenant=<slug>` query parameter across routes (manifest, auth, devmode, turn) when origin is Lovable or localhost (exactly `https://archable.lovable.app` and `http://localhost:5173`; no hint means `marani`), allowing multi-tenant preview without wildcard DNS.** Membership is still strictly enforced. → **decision (18 Oct): accepted.** DEV-1: LD; DEV-2 to initial: __
+
 ## Blocked on
 
 <!-- <task id> (DEV-x): what is needed, from whom -->

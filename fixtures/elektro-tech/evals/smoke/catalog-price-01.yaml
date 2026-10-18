@@ -1,0 +1,9 @@
+# evals/smoke/catalog-price-01.yaml: the price in the reply is the price the catalog returns.
+id: catalog-price-01
+turns:
+  - customer: "Do you have an Galaxy A55 5G 128GB? How much is it?"
+expect:
+  - tool_called: catalog.search
+  - judge: { question: "Does the reply quote an Galaxy A55 5G 128GB price exactly as catalog.search returned it?", min: 0.6 }
+fixtures:
+  customer: { phone: "+995555000222" }

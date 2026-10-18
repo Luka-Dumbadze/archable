@@ -1,0 +1,10 @@
+# assumptions.yaml: every default the compiler chose that the owner hasn't confirmed; shown in the preview.
+- id: a-03
+  path: apps.quickshipper.params.express.surcharge
+  value: 1000                         # 10.00 GEL
+  source: archetype retail.wine_delivery@2
+  confirm: "Express delivery costs 10 GEL extra. Right?"   # one-tap confirmation, not an open question
+- id: a-05
+  path: objects.customer.fields.age_verified
+  value: required before order.create
+  source: legal default for alcohol sales

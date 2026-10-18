@@ -11,7 +11,7 @@ export interface ManifestDeps {
 export function manifestRoutes(d: ManifestDeps) {
   const app = new Hono();
   app.get('/v1/manifest', async (c) => {
-    const r = routeOrigin(c.req.header('origin'));
+    const r = routeOrigin(c.req.header('origin'), c.req.url);
     if (!r) return c.json({ error: 'unknown_origin' }, 400);
     const m = r.kind === 'tenant' ? await d.bySlug(r.slug, r.env) : await d.byCustomDomain(r.host);
     if (!m) return c.json({ error: 'not_found' }, 404);

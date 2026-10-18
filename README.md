@@ -14,7 +14,8 @@ flowchart LR
     accTitle: Archable architecture
     accDescr: The Operating Loop serves customers under Cedar policy. Denials and feedback feed the Evolution Loop, which ships approved changes back through an atomic epoch flip.
 
-    subgraph RUN["Operating Loop · safe runtime"]
+    %% Subgraph titles use non-breaking spaces (and hyphen): Mermaid 11 would wrap them into the first box.
+    subgraph RUN["Operating Loop · safe runtime"]
         direction TB
         C(["<b>Customers</b><br/><small>Telegram · Web widget</small>"])
         A("<b>Agent Network</b><br/><small>Contact Center · Dispatch · CRM</small>")
@@ -25,7 +26,7 @@ flowchart LR
         P -->|ALLOW| D
     end
 
-    subgraph EVO["Evolution Loop · self-healing"]
+    subgraph EVO["Evolution Loop · self‑healing"]
         direction TB
         F("<b>Failure Signals</b><br/><small>denials · bottlenecks · feedback</small>")
         S("<b>Structured Desires</b><br/><small>clustered, e.g. D-14</small>")

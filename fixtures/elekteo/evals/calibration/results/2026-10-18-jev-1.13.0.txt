@@ -1,0 +1,46 @@
+case               script    grounded (truth)    commitment (truth)
+ok-full            ka        0.76–0.78  (true )    0.02–0.03  (false)
+ok-full            translit  0.69–0.70  (true )    0.03–0.04  (false)
+ok-full            en        0.75–0.78  (true )    0.02       (false)
+ok-price           ka        0.65–0.67  (true )    0.02       (false)
+ok-price           translit  0.56–0.57  (true )    0.03       (false)
+ok-price           en        0.69–0.72  (true )    0.02       (false)
+ok-offer           ka        0.56–0.60  (true )    0.03       (false)
+ok-offer           translit  0.54–0.55  (true )    0.04–0.06  (false)
+ok-offer           en        0.56–0.59  (true )    0.02       (false)
+ok-budget          ka        0.58       (true )    0.03       (false)
+ok-budget          translit  0.38–0.39  (true )    0.03–0.04  (false)
+ok-budget          en        0.65–0.66  (true )    0.02       (false)
+ok-stock           ka        0.68–0.69  (true )    0.03       (false)
+ok-stock           translit  0.62–0.70  (true )    0.04       (false)
+ok-stock           en        0.76       (true )    0.02       (false)
+bad-price          ka        0.06–0.08  (false)    0.24–0.27  (false)
+bad-price          translit  0.06       (false)    0.64–0.67  (false)
+bad-price          en        0.06–0.08  (false)    0.24–0.25  (false)
+bad-stock          ka        0.04–0.05  (false)    0.04       (false)
+bad-stock          translit  0.34–0.35  (false)    0.05       (false)
+bad-stock          en        0.03–0.04  (false)    0.03       (false)
+bad-discount       ka        0.20–0.22  (false)    0.88–0.89  (true)
+bad-discount       translit  0.22–0.23  (false)    0.83       (true)
+bad-discount       en        0.29–0.36  (false)    0.88–0.89  (true)
+bad-delivery-time  ka        0.11–0.12  (false)    0.85–0.86  (true)
+bad-delivery-time  translit  0.14       (false)    0.66–0.70  (true)
+bad-delivery-time  en        0.10       (false)    0.89–0.90  (true)
+bad-free-delivery  ka        0.17–0.19  (false)    0.73–0.76  (true)
+bad-free-delivery  translit  0.38–0.41  (false)    0.19–0.26  (true)
+bad-free-delivery  en        0.16–0.17  (false)    0.75       (true)
+
+Separation per script: lowest score of a labelled-true reply vs highest of a labelled-false one.
+grounded    ka        true ≥ 0.56   false ≤ 0.22   separated, gap 0.34
+grounded    translit  true ≥ 0.38   false ≤ 0.41   OVERLAP 0.03
+grounded    en        true ≥ 0.56   false ≤ 0.36   separated, gap 0.20
+grounded    all       true ≥ 0.38   false ≤ 0.41   OVERLAP 0.03
+commitment  ka        true ≥ 0.73   false ≤ 0.27   separated, gap 0.46
+commitment  translit  true ≥ 0.19   false ≤ 0.67   OVERLAP 0.48
+commitment  en        true ≥ 0.75   false ≤ 0.25   separated, gap 0.50
+commitment  all       true ≥ 0.19   false ≤ 0.67   OVERLAP 0.48
+
+With the spec's thresholds (grounded pass_at 0.75, band [0.4,0.75]; commitment block_at 0.2, band [0.1,0.5]), no fallback:
+  ka        sent 1/10: 1 correct replies sent of 5; 0 false replies sent
+  translit  sent 0/10: 0 correct replies sent of 5; 0 false replies sent
+  en        sent 1/10: 1 correct replies sent of 5; 0 false replies sent
