@@ -189,6 +189,14 @@ export function lower(r: Resolved, errors: Errors): { bundle: Lowered; projectio
       changeRules: Object.fromEntries(Object.entries(spec.risk.change_rules).sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, t]) => [k, tierOf(t)])),
       cutAtBoundedTools: spec.risk.influence.cut_at_bounded_tools,
     },
+    governance: {
+      approvals: Object.fromEntries(Object.entries(spec.governance.approvals).sort(([a], [b]) => (a < b ? -1 : 1))),
+      delegation: { to: spec.governance.delegation.to, upTo: tierOf(spec.governance.delegation.up_to) },
+      cardTtlHours: Object.fromEntries(Object.entries(spec.governance.card_ttl).sort(([a], [b]) => (a < b ? -1 : 1))
+        .map(([t, h]) => [tierOf(t), Number(String(h).slice(0, -1))])),
+      previewRequiredFrom: tierOf(spec.governance.preview_required_from),
+      architect: { maxOpenPrs: spec.governance.architect.max_open_prs, maxPatchAttempts: spec.governance.architect.max_patch_attempts },
+    },
     labels: labelsOf(r),
     evals: {
       suites: spec.evals.suites,
