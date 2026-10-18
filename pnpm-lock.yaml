@@ -226,6 +226,9 @@ importers:
       '@archable/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
+      '@vercel/functions':
+        specifier: 3.10.1
+        version: 3.10.1
       ai:
         specifier: 7.0.143
         version: 7.0.143(zod@4.6.7)
@@ -266,6 +269,9 @@ importers:
       '@archable/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@archable/governance':
+        specifier: workspace:*
+        version: link:../governance
       '@archable/runtime':
         specifier: workspace:*
         version: link:../runtime
@@ -278,6 +284,9 @@ importers:
       ai:
         specifier: 7.0.143
         version: 7.0.143(zod@4.6.7)
+      octokit:
+        specifier: 5.0.5
+        version: 5.0.5
       postgres:
         specifier: 3.4.9
         version: 3.4.9

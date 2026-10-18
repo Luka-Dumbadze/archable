@@ -12,8 +12,7 @@ import { compile, type Bundle } from '@archable/compiler';
 import { typesafeDecisionModel } from '../packages/runtime/src/index';
 import { controlDb, runtimeDb, withTenant } from '../apps/api/src/db';
 import { createLanguageModels, createTurnEngine } from '../apps/api/src/turn-wiring';
-import { closeEvalEnv, desireStore, draftPatch, evalHost, heal, intake, openEvalEnv, reproduce, runOnce, selectTests, verify,
-         type Lane } from '../packages/architect/src/index';
+import { desireStore, draftChange, intake, type Lane } from '../packages/architect/src/index';
 import { boundsFor, buildChangeRationale, labelsFrom, rationaleDigest, renderOps, renderRationale, witnesses } from '../packages/governance/src/index';
 
 const { values } = parseArgs({ options: { tenant: { type: 'string', default: 'marani' }, say: { type: 'string' }, keep: { type: 'boolean', default: false } } });
@@ -38,21 +37,8 @@ if (!t || t.active_digest !== base.digest) {
 const models = createLanguageModels();
 const jev = typesafeDecisionModel({ apiKey: process.env.TYPESAFE_API_KEY });
 const laneOf = (l: Bundle['models'][keyof Bundle['models']]): Lane => ({ model: models(l.model), ...(l.reasoning ? { reasoning: l.reasoning } : {}) });
-const patchLane = laneOf(base.bundle.models.patch);
 const store = desireStore(controlDb);
-const spec = YAML.parse(files['enterprise.spec.yaml']!) as { governance: { architect: { max_patch_attempts: number } } };
-const env = 'pr-0' as const;                                     // the dry run's preview environment: no PR number
-const turnIds: string[] = [];
-const registered: string[] = [];
-const host = (digest: string, bundle: Bundle) => {
-  const observed = new Map<string, { tool: string; output: Record<string, unknown> }[]>();
-  const observe = (turnId: string | null, tool: string, output: Record<string, unknown>) => {
-    if (turnId) observed.set(turnId, [...(observed.get(turnId) ?? []), { tool, output }]);
-  };
-  return evalHost({ control: controlDb, tenantId, env, digest, bundle, observed, judgeModel: jev, turnIds,
-                    handleTurn: createTurnEngine({ pinned: { env, digest, bundle }, observe }) });
-};
-
+const env = 'pr-0' as const;                                     // the dry run's eval environment: no PR, no desire-numbered env
 // 1. Intake.
 const at = new Date().toISOString();
 const r = await intake({ jev, lane: laneOf(base.bundle.models.dialogue), store }, { tenantId, text, at });
@@ -66,63 +52,42 @@ out(`→ D-${d.number} ${r.outcome} · “${d.statement}” (intent change, p ${
 const brief = { number: d.number, statement: d.statement, evidence: [`owner, ${at}: ${text}`] };
 
 try {
-  // 2. Reproduce: the case must fail on the active bundle.
-  const agent = Object.values(base.bundle.apps).map((a) => a.agent).find((a) => a && base.bundle.agents[a])!;
-  const failing = await reproduce(patchLane, brief, base.bundle.agents[agent]!.persona);
-  await openEvalEnv(controlDb, { tenantId, env, gitSha: 'dry-run', compiler: lock.compiler, bundles: [], seedDigest: base.digest, files });
-  const onBase = await runOnce(host(base.digest, base.bundle), failing.case, 'dry_base');
-  out(`→ ${failing.id}: ${failing.case.turns.map((x) => `“${x.customer}”`).join(' / ')}`);
-  if (onBase.pass) {
+  // 2–3. Reproduce, patch, compile, verify: the same code as the cron's draft job (packages/architect/src/draft.ts).
+  const result = await draftChange({ control: controlDb, models, jev, engine: (pinned, observe) => createTurnEngine({ pinned, observe }),
+                                     log: (event, data) => console.error(JSON.stringify({ event, ...data })) },
+    { tenantId, desire: brief, base: { files, lock, compiled: base, gitSha: 'dry-run' }, env });
+  out(`→ ${result.failing.id}: ${result.failing.case.turns.map((x) => `“${x.customer}”`).join(' / ')}`);
+  if (result.outcome === 'no_gap') {
     out('→ the case passes on the active bundle: no spec gap. The desire goes to the developer as an observation.');
+  } else if (result.outcome === 'to_developer') {
+    out(`→ ${result.attempts} attempts failed; the desire goes to the developer with the failing case.`);
+    for (const f of result.feedback) out(`  ${f.replace(/\n/g, '\n    ')}`);   // what the developer receives
   } else {
-    out(`→ reproduced: fails on the active bundle (${onBase.failures.join('; ')})`);
+    out(`→ reproduced: fails on the active bundle (${result.baseFailures.join('; ')})`);
+    const { changeset: cs, head, radius, verification: v } = result;
+    const suites = Object.values(v.suites);
+    const passes = suites.reduce((a, s) => a + s.passes, 0), runs = suites.reduce((a, s) => a + s.runs, 0);
+    const floors = [...new Set(witnesses(radius).map((x) => x.rule).filter((x) => x in base.bundle.risk.floors))];
+    out(`→ D-${d.number} · ChangeSet (${cs.ops.length} ops) · compile ok · tier T${radius.tier} (${floors.join(', ')}) · `
+      + `fail-to-pass ${v.failToPass ? '✓' : '✗'} · ${passes}/${runs}`);
+    for (const op of cs.ops) out(`    ${op.op} ${'path' in op ? op.path : 'id' in op ? op.id : 'agent' in op ? op.agent : 'object' in op ? `${op.object}.${op.field}` : ''}`);
+    for (const [name, s] of Object.entries(v.suites)) out(`    ${name}: ${s.passes}/${s.runs}${s.gate === 'all_pass' ? '' : ` (Wilson ${s.wilson_lb})`}`);
+    for (const n of v.notRun) out(`    not run: ${n}`);
 
-    // 3. Patch → compile → verify, up to max_patch_attempts.
-    const result = await heal({
-      desire: brief, base: { files, lock, bundle: base.bundle, digest: base.digest },
-      failing: { suite: 'regressions', id: failing.id, yaml: failing.yaml, case: failing.case },
-      maxAttempts: spec.governance.architect.max_patch_attempts,
-      draft: (feedback) => draftPatch(patchLane, { desire: brief, failingCase: failing.yaml, files, feedback }, base.digest),
-      verify: async (head, radius) => {
-        const o = await openEvalEnv(controlDb, { tenantId, env, gitSha: 'dry-run', compiler: lock.compiler, seedDigest: base.digest, files: head.files,
-          bundles: [{ digest: head.digest, bundle: head.bundle, projections: head.projections }] });
-        registered.push(...o.inserted);
-        return verify(host(head.digest, head.bundle), selectTests(head, radius, { suite: 'regressions', case: failing.case }),
-                      failing.id, `dry_${head.digest.slice(7, 15)}`);
-      },
-      log: (event, data) => console.error(JSON.stringify({ event, ...data })),
+    // 4. The rationale card for this head (plan §7.5), from the same facts the verify job would freeze.
+    const [row] = await withTenant(controlDb, tenantId, (tx) => tx<{ chapters: number; customers: number; quoted: number; abandoned: number;
+      abandoned_value: string; ordered: number; first_seen: Date | null; last_seen: Date | null }[]>`
+      select * from public.desire_impact(${tenantId}, ${d.id}, interval '2 hours')`);
+    const card = buildChangeRationale({
+      changeRequestId: 'dry-run', desire: { number: d.number, source: d.source, statement: d.statement }, ownerRequest: { at, text },
+      headSha: 'dry-run', quietHours: 2, reasons: witnesses(radius), bounds: boundsFor(head.bundle, radius), ops: renderOps(cs.ops, head.bundle),
+      impact: { ...row!, abandoned_value: Number(row!.abandoned_value), first_seen: row!.first_seen?.toISOString() ?? null, last_seen: row!.last_seen?.toISOString() ?? null },
+      verification: { suites: Object.fromEntries(Object.entries(v.suites).map(([k, s]) => [k, { passes: s.passes, runs: s.runs }])), new_cases: v.new_cases, elva_drift: v.elva_drift },
+      labels: labelsFrom(head.bundle, base.bundle), now: new Date().toISOString(),
     });
-
-    if (result.outcome === 'to_developer') {
-      out(`→ ${result.attempts} attempts failed; the desire goes to the developer with the failing case.`);
-      for (const f of result.feedback) out(`  ${f.replace(/\n/g, '\n    ')}`);   // what the developer receives
-    } else {
-      const { changeset: cs, head, radius, verification: v } = result;
-      const suites = Object.values(v.suites);
-      const passes = suites.reduce((a, s) => a + s.passes, 0), runs = suites.reduce((a, s) => a + s.runs, 0);
-      const floors = [...new Set(witnesses(radius).map((x) => x.rule).filter((x) => x in base.bundle.risk.floors))];
-      out(`→ D-${d.number} · ChangeSet (${cs.ops.length} ops) · compile ok · tier T${radius.tier} (${floors.join(', ')}) · `
-        + `fail-to-pass ${v.failToPass ? '✓' : '✗'} · ${passes}/${runs}`);
-      for (const op of cs.ops) out(`    ${op.op} ${'path' in op ? op.path : 'id' in op ? op.id : 'agent' in op ? op.agent : 'object' in op ? `${op.object}.${op.field}` : ''}`);
-      for (const [name, s] of Object.entries(v.suites)) out(`    ${name}: ${s.passes}/${s.runs}${s.gate === 'all_pass' ? '' : ` (Wilson ${s.wilson_lb})`}`);
-      for (const n of v.notRun) out(`    not run: ${n}`);
-
-      // 4. The rationale card for this head (plan §7.5), from the same facts the verify job would freeze.
-      const [row] = await withTenant(controlDb, tenantId, (tx) => tx<{ chapters: number; customers: number; quoted: number; abandoned: number;
-        abandoned_value: string; ordered: number; first_seen: Date | null; last_seen: Date | null }[]>`
-        select * from public.desire_impact(${tenantId}, ${d.id}, interval '2 hours')`);
-      const card = buildChangeRationale({
-        changeRequestId: 'dry-run', desire: { number: d.number, source: d.source, statement: d.statement }, ownerRequest: { at, text },
-        headSha: 'dry-run', quietHours: 2, reasons: witnesses(radius), bounds: boundsFor(head.bundle, radius), ops: renderOps(cs.ops, head.bundle),
-        impact: { ...row!, abandoned_value: Number(row!.abandoned_value), first_seen: row!.first_seen?.toISOString() ?? null, last_seen: row!.last_seen?.toISOString() ?? null },
-        verification: { suites: Object.fromEntries(Object.entries(v.suites).map(([k, s]) => [k, { passes: s.passes, runs: s.runs }])), new_cases: v.new_cases, elva_drift: v.elva_drift },
-        labels: labelsFrom(head.bundle, base.bundle), now: new Date().toISOString(),
-      });
-      out(`\n${renderRationale(card)}\n\nrationale digest ${rationaleDigest(card)} · head bundle ${head.digest} · nothing pushed`);
-    }
+    out(`\n${renderRationale(card)}\n\nrationale digest ${rationaleDigest(card)} · head bundle ${head.digest} · nothing pushed`);
   }
 } finally {
-  await closeEvalEnv(controlDb, { tenantId, env, turnIds, unregister: registered });
   if (!values.keep && r.outcome === 'opened') await store.remove(tenantId, d.id);
   await controlDb.end();
   await runtimeDb.end();

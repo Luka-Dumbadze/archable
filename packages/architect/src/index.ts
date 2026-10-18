@@ -6,3 +6,6 @@ export { intake, INTENTS, normalize, type IntakeDeps, type IntakeResult } from '
 export { draftPatch, reproduce, type DesireBrief, type Lane, type PatchContext } from './patch';
 export { desireStore, type DesireSource, type DesireStore, type Evidence, type OpenDesire } from './store';
 export { selectTests, verify, type Selection, type Verification } from './verify';
+export { runDraftJob, type AuthorDeps, type DraftJob, type DraftJobOutcome } from './author';
+export { draftChange, draftEnv, type DraftDeps, type DraftInput, type DraftResult, type Failing } from './draft';
+export { runVerifyJob, type VerifyJob, type VerifyJobOutcome } from './reverify';

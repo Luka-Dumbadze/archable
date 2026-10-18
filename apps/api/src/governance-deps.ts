@@ -18,6 +18,7 @@ export interface GovernanceWiring {
   cards?: CardEditor;                                 // DEV-1's card editor (Telegram)
   intake: { jev: IntakeDeps['jev']; lane: Lane };
   log?(event: string, data: Record<string, unknown>): void;
+  kick?(): void;                                      // start the queue drain now (architect-wiring.ts)
 }
 
 const PRESS_PATH = '/v1/owner/press';                 // web: POST with body; Telegram: callback_data = body.ref
@@ -114,6 +115,7 @@ export function createGovernanceDeps(w: GovernanceWiring) {
           await tx`update public.desires set status = 'drafting', updated_at = now() where tenant_id = ${tenantId} and id = ${desire} and status = 'open'`;
           await tx`select private.architect_send(${tx.json({ kind: 'draft', tenant_id: tenantId, desire_id: desire })})`;
         });
+        w.kick?.();                                   // the draft starts now, not at the next cron tick
         return { text: 'Drafting it now. I’ll send you the change to approve once it’s checked.', buttons: [] };
       }
       return null;

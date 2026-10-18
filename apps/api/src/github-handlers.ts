@@ -10,7 +10,7 @@ import { withTenant } from './db';
 
 type Sql = postgres.Sql;
 
-export function registerGithubHandlers(app: App, d: { control: Sql; cards?: CardEditor; log(event: string, data: Record<string, unknown>): void }) {
+export function registerGithubHandlers(app: App, d: { control: Sql; cards?: CardEditor; kick?(): void; log(event: string, data: Record<string, unknown>): void }) {
   const cards = d.cards ?? noCards;
   const tenantOf = async (installation: number | undefined, repo: string) => {
     if (!installation) return null;
@@ -32,6 +32,9 @@ export function registerGithubHandlers(app: App, d: { control: Sql; cards?: Card
     const open = await supersedeCards(d.control, tenantId, cr.id, head);
     await cards.supersede(open, cr.title);                                         // awaited: lands within the round trip
     d.log('github.superseded', { delivery: id, change_request: cr.id, cards: open.length });
+    // The new head is verified like the Architect's own (reverify.ts), now rather than at the next tick.
+    await d.control`select private.verify_send(${d.control.json({ kind: 'verify', tenant_id: tenantId, change_request_id: cr.id })})`;
+    d.kick?.();
   });
 
   app.webhooks.on('pull_request_review.submitted', async ({ id, payload }) => {
