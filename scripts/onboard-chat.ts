@@ -18,7 +18,16 @@ import { createLanguageModels } from '../apps/api/src/turn-wiring';
 const token = process.env.ARCHABLE_BOT_TOKEN!, owner = Number(process.env.OWNER_TG);
 const webhook = { url: process.env.WEBHOOK_URL!, secret: process.env.WEBHOOK_SECRET! };
 if (!token || !owner || !webhook.url || !webhook.secret) throw new Error('set ARCHABLE_BOT_TOKEN, OWNER_TG, WEBHOOK_URL, WEBHOOK_SECRET');
+// DRY_DESCRIPTION: a rehearsal without Telegram, the database or GitHub: messages go to the console, the answers are
+// 10% and 500 GEL, and the build stops after compiling.
+const dry = process.env.DRY_DESCRIPTION;
+const dryAnswers = ['10%', '500 GEL'];
 const tg = async <T = unknown>(method: string, body: object = {}): Promise<T> => {
+  if (dry) {
+    const b = body as { text?: string };
+    if (b.text) console.log(`[bot] ${b.text}\n`);
+    return { message_id: 1 } as T;
+  }
   const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const j = (await r.json()) as { ok: boolean; result: T; description?: string };
   if (!j.ok) throw new Error(`${method}: ${j.description}`);
@@ -29,7 +38,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const model = createLanguageModels()('openai/gpt-6-luna');
 
 let offset = 0;
+let dryTurn = 0;
 async function nextMessage(): Promise<string> {
+  if (dry) { const m = dryTurn === 0 ? dry : dryAnswers[dryTurn - 1] ?? ''; dryTurn++; console.log(`[owner] ${m}\n`); return m; }
   for (;;) {
     const ups = await tg<{ update_id: number; message?: { chat: { id: number }; text?: string } }[]>('getUpdates', { offset, timeout: 25, allowed_updates: ['message'] });
     for (const u of ups) {
@@ -47,7 +58,12 @@ async function progress(title: string) {
   return {
     async step(text: string, run: () => Promise<string | void> = async () => {}) {
       lines.push(`⏳ ${text}`); await render();
-      const detail = await run();
+      let detail: string | void;
+      try { detail = await run(); } catch (e) {
+        lines[lines.length - 1] = `⚠️ ${text} — stopped`; await render();
+        await say('Something went wrong while building. Nothing was half-created that you need to clean up; send me your description again to retry.');
+        throw e;
+      }
       lines[lines.length - 1] = `✅ ${text}${detail ? ` — ${detail}` : ''}`; await render();
       await sleep(500);
     },
@@ -110,7 +126,7 @@ try {
     for (const f of walk(ROOT)) files[relative(ROOT, f).split(sep).join('/')] = readFileSync(f, 'utf8').replace(/\r\n/g, '\n');
     let s = files['enterprise.spec.yaml']!;
     s = s.replace(/^# enterprise\.spec\.yaml:.*$/m, `# enterprise.spec.yaml: ${os}, ${p.kind} in ${p.city} (onboarded by conversation)`)
-      .replace(/  id: elektro(\s+#.*)?\n/, `  id: ${slug}\n`).replace('  name: Elektro Tbilisi\n', `  name: ${p.business_name}\n`).replace('  os_name: Elektro OS', `  os_name: ${os}`)
+      .replace(/  id: elektro(\s+#.*)?\n/, `  id: ${slug.replace(/-/g, '_')}\n`)   // spec ids: [a-z_][a-z0-9_]*; the slug keeps its hyphen.replace('  name: Elektro Tbilisi\n', `  name: ${p.business_name}\n`).replace('  os_name: Elektro OS', `  os_name: ${os}`)
       .replace('values: [phones, laptops, tvs, audio, appliances, accessories]', `values: [${cats.map((c) => c.id).join(', ')}]`)
       .replace(/        value_labels:\n(?:          [a-z_]+: \{[^\n]*\}\n)+/, `        value_labels:\n${cats.map((c) => `          ${c.id}: { en: ${JSON.stringify(c.en)}, ka: ${JSON.stringify(c.ka)} }`).join('\n')}\n`)
       .replace(/elektro-courier/g, `${slug}-courier`).replace(/vault:elektro\//g, `vault:${slug}/`).replace('https://elektro.ge', `https://${slug}.ge`);
@@ -142,6 +158,7 @@ try {
     for (const [path, text] of Object.entries(files)) { const to = join('fixtures', slug, path); mkdirSync(dirname(to), { recursive: true }); writeFileSync(to, text); }
     return `${Object.keys(b.tools).length} tools · 2 agents · ${Object.keys(b.policies.byId).length} policies · ${b.graph.nodes.length}-node impact graph · ${Math.round(performance.now() - t0)} ms`;
   });
+  if (dry) { console.log(JSON.stringify({ dry: true, slug, digest: compiled.digest, discount, large })); process.exit(0); }
   await pr.step('Creating the database', async () => {
     const out = run(['scripts/onboard.ts', '--slug', slug]);
     return (out.match(/epoch \d+/)?.[0] ?? 'live').replace('epoch', 'live at epoch');
