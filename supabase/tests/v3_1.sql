@@ -318,6 +318,18 @@ reset role;
 select pg_temp.raises($q$insert into public.tenants (slug, name, os_name) values ('api', 'x', 'x')$q$, '23514', 'D9 api cannot be a tenant slug');
 select pg_temp.raises($q$insert into public.tenants (slug, name, os_name) values ('zz--pr', 'x', 'x')$q$, '23514', 'D9 -- is reserved for previews');
 
+-- ─────────────────── D2 (cont.) a deleted tenant takes its secrets with it ───────────────────
+-- Migration 20261018000004: the cascade removes channel rows; the trigger removes '<slug>/…' Vault secrets.
+
+insert into public.tenants (id, slug, name, os_name, status) values ('cccccccc-0000-4000-8000-000000000001', 'zz-gamma', 'Gamma', 'Gamma OS', 'live');
+insert into public.memberships (id, tenant_id, role, display_name, tg_user_id)
+values ('cccccccc-0000-4000-8000-0000000000c1', 'cccccccc-0000-4000-8000-000000000001', 'owner', 'Owner C', 3001);
+select public.bind_tenant_bot('cccccccc-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-0000000000c1',
+                              557, 'gamma_bot', 'TOKEN-C', 'cccccccc-0000-4000-8000-0000000001a1', pg_temp.h('sc'));
+select pg_temp.ok((select count(*) from vault.secrets where name = 'zz-gamma/tg_bot_token') = 1, 'D2 the gamma token is in Vault');
+delete from public.tenants where id = 'cccccccc-0000-4000-8000-000000000001';
+select pg_temp.ok((select count(*) from vault.secrets where name like 'zz-gamma/%') = 0, 'D2 deleting a tenant deletes its Vault secrets');
+
 rollback;
 select 'v3_1.sql PASSED (D1–D9' ||
        case when exists (select 1 from pg_inherits i join pg_class c on c.oid = i.inhrelid
