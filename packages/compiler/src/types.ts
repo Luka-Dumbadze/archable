@@ -1,17 +1,12 @@
 // The compiler's public types (plan §4.3).
-import type { A2AGraph, Effect, JsonSchema } from '@archable/contracts';
+import type { A2AGraph, Effect, JsonSchema, WidgetConfig } from '@archable/contracts';
+import type { ActionFacts } from './cedar-schema';
 import type { Digest } from './digest';
 import type { EdgeKind, GNode } from './graph/blast';
 import type { PolicyBound } from './policy-bounds';
 
 export interface RepoTree { files: Record<string, string> }             // path → UTF-8 content; nothing else is read
 export interface Lock { compiler: string; templates: Record<string, string>; shell: string }
-
-export interface WidgetConfig {                                         // public projection of channels.web_chat + ui.theme (plan §6.5)
-  greeting: Record<string, string>;
-  launcher: { label: Record<string, string>; position: 'left' | 'right' };
-  brand: string;
-}
 
 export interface Bundle {
   apiVersion: 'archable.dev/v3';
@@ -23,11 +18,13 @@ export interface Bundle {
                           effect: Effect; reads: string[]; writes: string[]; connection?: string; needsQuote: boolean;
                           idempotency?: string[]; operation_id: string }>;
   agents: Record<string, { app: string; persona: string; tools: string[]; decisions: unknown; context: unknown; display_name: Record<string, string> }>;
-  triggers: Record<string, { on: string; call: string }>;
+  // object/field/values: `on` parsed, so the records trigger in Postgres can match without parsing (P3.D2.3).
+  triggers: Record<string, { on: string; call: string; object: string; field: string; values: string[] }>;
   decisions: Record<string, unknown>;                                   // v3 §6 decisions, thresholds included
-  policies: { byId: Record<string, string>; schema: unknown; bounds: PolicyBound[] };
-  // embed_origins is not in plan §4.3's type; the chat page needs it for frame-ancestors (plan §6.6).
-  channels: Record<string, { kind: 'telegram_bot' | 'telegram_business' | 'web'; public?: WidgetConfig; embed_origins?: string[] }>;
+  policies: { byId: Record<string, string>; schema: unknown; bounds: PolicyBound[]; facts: Record<string, ActionFacts> };
+  channels: Record<string, { kind: 'telegram_bot' | 'telegram_business' | 'web'; public?: WidgetConfig }>;   // WidgetConfig incl. embed_origins (Q3)
+  apps: Record<string, { template: string; agent: string | null; channels: string[] }>;   // which agent serves which channel
+  params: Record<string, unknown>;                                      // apps.*.params, flattened: 'quickshipper.express.surcharge'
   ui: unknown;                                                          // v3 §2.4 UI projection
   graph: { nodes: GNode[]; edges: { from: string; to: string; kind: EdgeKind }[] };
   a2a: A2AGraph;

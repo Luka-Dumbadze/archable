@@ -8,5 +8,14 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@archable/compiler": "workspace:*",
+    "@archable/contracts": "workspace:*",
+    "@archable/schema": "workspace:*",
+    "canonicalize": "5.1.0",
+    "octokit": "5.0.5",
+    "postgres": "3.4.9",
+    "zod": "4.6.7"
   }
 }
