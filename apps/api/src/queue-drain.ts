@@ -19,6 +19,12 @@ export interface DrainReport { architect: unknown[]; verify: unknown[]; triggers
 
 type Row = { msg_id: string; read_ct: number; message: Record<string, unknown> };
 
+// A dropped connection (database, GitHub, a model) during a long draft: retried at once, not after the visibility
+// timeout. Expected outcomes never throw, so only infrastructure errors reach here.
+const TRANSIENT = /ECONNRESET|ETIMEDOUT|EPIPE|ECONNREFUSED|EAI_AGAIN|ENOTFOUND|socket hang up|fetch failed|other side closed/i;
+const isTransient = (e: unknown) => TRANSIENT.test(`${String(e)} ${String((e as { code?: unknown })?.code ?? '')} ${String((e as { cause?: unknown })?.cause ?? '')}`);
+const IMMEDIATE_RETRIES = 2;
+
 export function createQueueDrainer(d: DrainDeps) {
   let running: Promise<DrainReport> | null = null;
 
@@ -28,14 +34,23 @@ export function createQueueDrainer(d: DrainDeps) {
       const [job] = await d.control<Row[]>`select * from private.queue_read(${name}, 1, ${VISIBILITY_S})`;
       if (!job) return out;
       const archive = () => d.control`select private.queue_archive(${name}, ${job.msg_id})`;
+      const attempt = async () => {
+        for (let i = 0; ; i++) {
+          try { return await handle(job.message); } catch (e) {
+            if (i >= IMMEDIATE_RETRIES || !isTransient(e)) throw e;
+            d.log('queue.job_retry', { queue: name, msg: job.msg_id, attempt: i + 1, error: String(e), stack: (e as Error)?.stack?.split('\n').slice(0, 6).join(' | ') });
+          }
+        }
+      };
       try {
-        const r = await handle(job.message);
+        const r = await attempt();
         d.log('queue.job', { queue: name, msg: job.msg_id, kind: job.message.kind, ...r });
         if (!r.retry) await archive();                               // a retry comes back after the visibility timeout
         out.push({ msg: Number(job.msg_id), ...r });
       } catch (e) {
         const dead = job.read_ct >= MAX_READS;
-        d.log('queue.job_failed', { queue: name, msg: job.msg_id, kind: job.message.kind, reads: job.read_ct, dead, error: String(e) });
+        d.log('queue.job_failed', { queue: name, msg: job.msg_id, kind: job.message.kind, reads: job.read_ct, dead, error: String(e),
+                                    stack: (e as Error)?.stack?.split('\n').slice(0, 6).join(' | ') });
         if (dead) await archive();
         out.push({ msg: Number(job.msg_id), outcome: dead ? 'dead' : 'failed', error: String(e) });
         if (!dead) return out;                                       // leave the rest for the next tick
