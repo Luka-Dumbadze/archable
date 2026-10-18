@@ -18,6 +18,11 @@ export function createArchitect(o: { app: App; send?: CardDeps['send']; log(even
   };
   const triggers = createTriggerDrainer();
   const drain = createQueueDrainer({ control: controlDb, author, triggers: (qty) => triggers(qty), log: o.log });
-  const kick = () => waitUntil(drain().then((r) => o.log('queue.kick', { ...r }), (e: unknown) => o.log('queue.kick_failed', { error: String(e) })));
+  // Returns the drain too, for a caller that outlives no request (a script) and wants to await it.
+  const kick = (): Promise<void> => {
+    const p = drain().then((r) => o.log('queue.kick', { ...r }), (e: unknown) => o.log('queue.kick_failed', { error: String(e) }));
+    waitUntil(p);
+    return p;
+  };
   return { author, drain, kick };
 }
